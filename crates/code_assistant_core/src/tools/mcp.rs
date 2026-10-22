@@ -16,9 +16,14 @@ pub use mcp_client::{
 };
 
 /// Scope tags every MCP tool carries in code-assistant: offered to the main
-/// agent (both dialect variants), not to sub-agents and not through the MCP
+/// agent and to sub-agents (both dialect variants each), not through the MCP
 /// server mode.
-pub const MCP_TOOL_SCOPES: &[&str] = &[capabilities::SCOPE_AGENT, capabilities::SCOPE_AGENT_DIFF];
+pub const MCP_TOOL_SCOPES: &[&str] = &[
+    capabilities::SCOPE_AGENT,
+    capabilities::SCOPE_AGENT_DIFF,
+    capabilities::SCOPE_SUBAGENT_DEFAULT,
+    capabilities::SCOPE_SUBAGENT_DEFAULT_DIFF,
+];
 
 /// Path of the MCP servers configuration file.
 pub fn mcp_servers_config_path() -> PathBuf {
