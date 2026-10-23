@@ -2,6 +2,7 @@
 //! [`crate::hooks`]; application state travels type-erased in `extensions`.
 
 mod handoff;
+mod review;
 #[cfg(test)]
 mod tests;
 mod tool_execution;

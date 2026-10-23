@@ -92,12 +92,16 @@ impl AcpPermissionMediator {
                 ),
                 None => format!("Command: `{}`", command_line),
             },
-            PermissionRequestReason::ToolInvocation { params } => {
-                format!(
+            PermissionRequestReason::ToolInvocation { params, concern } => {
+                let call = format!(
                     "Tool: `{}`\nParameters: {}",
                     tool_name,
                     serde_json::to_string_pretty(params).unwrap_or_else(|_| params.to_string())
-                )
+                );
+                match concern {
+                    Some(concern) => format!("Auto review: {concern}\n{call}"),
+                    None => call,
+                }
             }
             PermissionRequestReason::TrustLocalMcp {
                 project_dir,
@@ -124,9 +128,10 @@ impl AcpPermissionMediator {
                 "command_line": command_line,
                 "working_dir": working_dir.map(|dir| dir.display().to_string()),
             }),
-            PermissionRequestReason::ToolInvocation { params } => json!({
+            PermissionRequestReason::ToolInvocation { params, concern } => json!({
                 "type": "tool_invocation",
                 "params": params,
+                "review_concern": concern,
             }),
             PermissionRequestReason::TrustLocalMcp {
                 project_dir,

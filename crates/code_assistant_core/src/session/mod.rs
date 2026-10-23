@@ -370,7 +370,7 @@ mod tests {
                 "initial_project": "demo",
                 "tool_syntax": "Yaml",
                 "sandbox_policy": {"mode": "future-policy"},
-                "permission_tier": "auto",
+                "permission_tier": "future-tier",
                 "branch": "feature/x"
             }"#,
         )

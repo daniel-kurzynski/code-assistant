@@ -21,6 +21,11 @@ pub struct ProviderConfig {
     pub provider: String,
     /// Provider-specific configuration
     pub config: serde_json::Value,
+    /// The model (key of an offered model) that reviews tool calls in auto
+    /// permission mode for sessions running on this provider; without one
+    /// the session's own model reviews.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auto_review_model: Option<String>,
 }
 
 /// Configuration for all providers (provider_id -> ProviderConfig)
@@ -336,6 +341,21 @@ impl ConfigurationSystem {
         })?;
 
         Ok((model, provider))
+    }
+
+    /// The model reviewing tool calls in auto permission mode for a session
+    /// running `session_model`: the auto-review model of the session model's
+    /// provider while it is offered, else the session model itself. Both by
+    /// key; `None` when the session model is not offered.
+    pub fn auto_review_model(&self, session_model: &str) -> Option<String> {
+        let session_key = self.resolve_key(session_model)?;
+        let provider = self.get_provider(&self.models[&session_key].provider);
+        Some(
+            provider
+                .and_then(|provider| provider.auto_review_model.as_deref())
+                .and_then(|model| self.resolve_key(model))
+                .unwrap_or(session_key),
+        )
     }
 
     /// The keys of the offered models, ordered by display name
@@ -772,6 +792,7 @@ mod tests {
             label: label.into(),
             provider: provider_type.into(),
             config: serde_json::json!({}),
+            auto_review_model: None,
         }
     }
 
@@ -812,6 +833,44 @@ mod tests {
             "the catalog name"
         );
         assert!(config.get_model("GPT-9").is_none());
+    }
+
+    #[test]
+    fn auto_review_uses_the_providers_model_while_it_is_offered() {
+        let mut config = config(vec![
+            ModelConfig::new("anthropic", "claude-opus-5"),
+            ModelConfig::new("anthropic", "claude-haiku-5"),
+            ModelConfig::new("hai", "anthropic--claude-4.8-opus"),
+        ]);
+        config
+            .providers
+            .get_mut("anthropic")
+            .unwrap()
+            .auto_review_model = Some("anthropic/claude-haiku-5".into());
+
+        assert_eq!(
+            config
+                .auto_review_model("anthropic/claude-opus-5")
+                .as_deref(),
+            Some("anthropic/claude-haiku-5")
+        );
+        assert_eq!(
+            config
+                .auto_review_model("hai/anthropic--claude-4.8-opus")
+                .as_deref(),
+            Some("hai/anthropic--claude-4.8-opus"),
+            "a provider without a review model reviews with the session model"
+        );
+
+        config.models.remove("anthropic/claude-haiku-5");
+        assert_eq!(
+            config
+                .auto_review_model("anthropic/claude-opus-5")
+                .as_deref(),
+            Some("anthropic/claude-opus-5"),
+            "a review model that is no longer offered falls back"
+        );
+        assert_eq!(config.auto_review_model("GPT-9"), None);
     }
 
     #[test]

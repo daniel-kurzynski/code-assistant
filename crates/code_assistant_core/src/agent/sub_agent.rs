@@ -340,7 +340,14 @@ impl DefaultSubAgentRunner {
             ui,
             state_persistence: Box::new(NoOpStatePersistence),
             permission_handler,
-            permissions: self.permissions.clone(),
+            permissions: {
+                let mut permissions = self.permissions.clone();
+                permissions.reviewer = permissions.reviewer.map(|reviewer| {
+                    Arc::new(super::auto_review::SubAgentReviewer(reviewer))
+                        as Arc<dyn tools_core::ToolCallReviewer>
+                });
+                permissions
+            },
             tool_registry: self.tool_registry.clone(),
             sub_agent_runner: None,
             // Sub-agents run to completion inside the parent's turn; a

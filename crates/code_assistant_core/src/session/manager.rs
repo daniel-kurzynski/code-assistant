@@ -1357,6 +1357,15 @@ impl SessionManager {
                 .map(|instance| instance.permissions.clone())
                 .unwrap_or_default();
             permissions.tier = session_config.permission_tier;
+            permissions.reviewer = (permissions.tier == tools_core::PermissionTier::Auto).then(
+                || -> Arc<dyn tools_core::ToolCallReviewer> {
+                    Arc::new(crate::agent::auto_review::LlmToolCallReviewer::new(
+                        model_for_subagent.model_name.clone(),
+                        session_config.effective_project_path().cloned(),
+                        crate::agent::auto_review::default_review_client_factory(),
+                    ))
+                },
+            );
             permissions
         };
 
@@ -3103,6 +3112,7 @@ mod tests {
             label: provider.to_string(),
             provider: provider.to_string(),
             config,
+            auto_review_model: None,
         }
     }
 

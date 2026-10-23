@@ -135,7 +135,10 @@ async fn login_handoff(
         .request_permission(PermissionRequest {
             tool_id,
             tool_name: "browser_login",
-            reason: PermissionRequestReason::ToolInvocation { params: &params },
+            reason: PermissionRequestReason::ToolInvocation {
+                params: &params,
+                concern: None,
+            },
         })
         .await?;
 

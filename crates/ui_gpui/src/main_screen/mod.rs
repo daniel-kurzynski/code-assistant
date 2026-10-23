@@ -1495,6 +1495,13 @@ impl MainScreen {
                 .gap_2()
                 .children(requests.into_iter().map(|request| {
                     let rid = request.request_id.clone();
+                    // Why the auto review did not approve the call; shown in
+                    // full instead of the one-line summary.
+                    let review_concern = request
+                        .metadata
+                        .get("review_concern")
+                        .and_then(|concern| concern.as_str())
+                        .map(|concern| format!("Auto review: {concern}"));
                     div()
                         .flex()
                         .flex_row()
@@ -1516,14 +1523,18 @@ impl MainScreen {
                                             request.tool_name
                                         )),
                                 )
-                                .child(
-                                    div()
+                                .child(match review_concern {
+                                    Some(concern) => div()
+                                        .text_xs()
+                                        .text_color(cx.theme().warning)
+                                        .child(concern),
+                                    None => div()
                                         .text_xs()
                                         .text_color(cx.theme().muted_foreground)
                                         .overflow_hidden()
                                         .text_ellipsis()
                                         .child(request.summary.clone()),
-                                ),
+                                }),
                         )
                         // Render whatever choices the request carries; the
                         // first is the primary action. Frontends don't decide

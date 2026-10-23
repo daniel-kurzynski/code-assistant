@@ -23,7 +23,8 @@ screen writes both files for you; you can also edit them by hand.
     "config": {
       "api_key": "${ANTHROPIC_API_KEY}",
       "base_url": "https://api.anthropic.com/v1"
-    }
+    },
+    "auto_review_model": "anthropic-main/claude-haiku-4-5"
   },
   "openai-chatgpt": {
     "label": "ChatGPT Subscription",
@@ -37,6 +38,12 @@ screen writes both files for you; you can also edit them by hand.
 
 Use `${VAR_NAME}` to reference environment variables for API keys. Each entry's
 top-level key (e.g. `anthropic-main`) is the provider ID models refer to.
+
+`auto_review_model` (optional, *Settings → Providers → Auto review*) names the
+model, by key of an offered model, that reviews tool calls in the **Auto**
+permission mode for sessions running on this provider. Without it, or while
+that model is not offered, the session's own model reviews. See
+[permission-tiers.md](permission-tiers.md#auto-mode).
 
 ### Which models the picker offers — `model-selection.json`
 

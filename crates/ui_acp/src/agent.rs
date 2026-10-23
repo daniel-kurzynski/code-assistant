@@ -42,6 +42,12 @@ const PERMISSION_MODES: &[(PermissionTier, &str, &str, &str)] = &[
         "Run every tool without asking",
     ),
     (
+        PermissionTier::Auto,
+        "auto",
+        "Auto (Reviewed)",
+        "A reviewer model approves safe tool calls and asks about the rest",
+    ),
+    (
         PermissionTier::OutwardTools,
         "outward-tools",
         "Ask Before Outward Actions",

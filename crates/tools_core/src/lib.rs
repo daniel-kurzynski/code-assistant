@@ -26,7 +26,8 @@ pub use dyn_tool::{AnyOutput, DynTool};
 pub use image::{MAX_IMAGE_EDGE, cap_base64_image, cap_image_data};
 pub use permissions::{
     PermissionDecision, PermissionMediator, PermissionRequest, PermissionRequestReason,
-    PermissionTier, ToolPermissions,
+    PermissionTier, ReviewTranscript, ReviewVerdict, ToolCallReview, ToolCallReviewer,
+    ToolPermissions,
 };
 pub use registry::ToolRegistry;
 pub use render::{ImageData, Render, ResourcesTracker};

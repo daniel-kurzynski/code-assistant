@@ -20,6 +20,8 @@ pub struct ProviderEntry {
     pub has_api_key: bool,
     /// The raw config object from providers.json (for populating provider-specific forms)
     pub raw_config: Option<serde_json::Map<String, serde_json::Value>>,
+    /// The model reviewing tool calls in auto permission mode (model key).
+    pub auto_review_model: Option<String>,
 }
 
 /// State of the "Add Provider" form.
@@ -66,6 +68,43 @@ const PROVIDER_TYPES: &[(&str, &str)] = &[
     ("ai-core", "SAP AI Core"),
 ];
 
+/// Value of the auto-review choice "the session's own model".
+const REVIEW_WITH_SESSION_MODEL: &str = "";
+
+/// Choice for the auto-review model: an offered model, by key.
+#[derive(Clone, Debug)]
+struct ReviewModelItem {
+    key: String,
+    name: String,
+}
+
+impl SelectItem for ReviewModelItem {
+    type Value = String;
+
+    fn title(&self) -> SharedString {
+        SharedString::from(self.name.clone())
+    }
+
+    fn value(&self) -> &Self::Value {
+        &self.key
+    }
+}
+
+/// The session's own model, then every offered model.
+fn review_model_items() -> Vec<ReviewModelItem> {
+    let mut items = vec![ReviewModelItem {
+        key: REVIEW_WITH_SESSION_MODEL.to_string(),
+        name: "Session model".to_string(),
+    }];
+    if let Ok(config) = llm::provider_config::ConfigurationSystem::load() {
+        items.extend(config.list_models().into_iter().map(|key| ReviewModelItem {
+            name: config.display_name(&key),
+            key,
+        }));
+    }
+    items
+}
+
 fn provider_type_items() -> Vec<ProviderTypeItem> {
     PROVIDER_TYPES
         .iter()
@@ -86,6 +125,8 @@ pub struct ProvidersSection {
     // Provider type dropdown
     provider_type_select: Entity<SelectState<Vec<ProviderTypeItem>>>,
     _provider_type_subscription: gpui_kit::Subscription,
+    // Model reviewing tool calls in auto permission mode
+    auto_review_select: Entity<SelectState<Vec<ReviewModelItem>>>,
     // Provider-specific form
     form_holder: ProviderFormHolder,
     // Onboarding suggestions
@@ -116,6 +157,9 @@ impl ProvidersSection {
             Self::on_provider_type_changed,
         );
 
+        let auto_review_select =
+            cx.new(|cx| SelectState::new(Vec::<ReviewModelItem>::new(), None, window, cx));
+
         let form_holder = ProviderFormHolder::new("anthropic", window, cx);
 
         // Detect user environment and get applicable suggestions
@@ -134,6 +178,7 @@ impl ProvidersSection {
             form_provider_type: "anthropic".to_string(),
             provider_type_select,
             _provider_type_subscription: provider_type_subscription,
+            auto_review_select,
             form_holder,
             suggestions,
             active_suggestion: None,
@@ -200,6 +245,10 @@ impl ProvidersSection {
                     .and_then(|c| c.get("api_key").or_else(|| c.get("client_id")))
                     .is_some();
                 let raw_config = value.get("config").and_then(|c| c.as_object()).cloned();
+                let auto_review_model = value
+                    .get("auto_review_model")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
 
                 ProviderEntry {
                     key,
@@ -208,6 +257,7 @@ impl ProvidersSection {
                     base_url,
                     has_api_key,
                     raw_config,
+                    auto_review_model,
                 }
             })
             .collect()
@@ -251,6 +301,8 @@ impl ProvidersSection {
             state.set_selected_value(&entry.provider_type, window, cx);
         });
 
+        self.reset_auto_review_select(entry.auto_review_model.as_deref(), window, cx);
+
         // Switch form holder to correct provider type
         self.form_holder.switch_to(&entry.provider_type, window, cx);
 
@@ -258,6 +310,29 @@ impl ProvidersSection {
         if let Some(ref config) = entry.raw_config {
             self.form_holder.load_config(config, window, cx);
         }
+    }
+
+    /// Offer the current models and select `selected` (a model key; `None`:
+    /// the session model). A key no longer offered stays selectable so
+    /// saving does not drop it unnoticed.
+    fn reset_auto_review_select(
+        &mut self,
+        selected: Option<&str>,
+        window: &mut gpui_kit::Window,
+        cx: &mut Context<Self>,
+    ) {
+        let mut items = review_model_items();
+        let selected = selected.unwrap_or(REVIEW_WITH_SESSION_MODEL).to_string();
+        if !items.iter().any(|item| item.key == selected) {
+            items.push(ReviewModelItem {
+                name: format!("{selected} (not offered)"),
+                key: selected.clone(),
+            });
+        }
+        self.auto_review_select.update(cx, |state, cx| {
+            state.set_items(items, window, cx);
+            state.set_selected_value(&selected, window, cx);
+        });
     }
 
     /// Render a single provider card. When expanded, the form is inside the card.
@@ -471,6 +546,38 @@ impl ProvidersSection {
             )
             // Provider-specific form fields
             .child(self.form_holder.render())
+            // Model reviewing tool calls in auto permission mode
+            .child(
+                self.render_form_row(
+                    "Auto review",
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .child(
+                            Select::new(&self.auto_review_select)
+                                .with_size(Size::Small)
+                                .icon(
+                                    Icon::default()
+                                        .path("icons/chevron_up_down.svg")
+                                        .with_size(Size::XSmall)
+                                        .text_color(cx.theme().muted_foreground),
+                                )
+                                .min_w(px(200.)),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .child(
+                                    "Reviews tool calls in the Auto permission mode for \
+                                     sessions on this provider. A small, fast model works well.",
+                                ),
+                        )
+                        .into_any_element(),
+                    cx,
+                ),
+            )
             // Action buttons
             .child(
                 div()
@@ -597,6 +704,7 @@ impl ProvidersSection {
                 });
                 this.form_holder.switch_to("anthropic", window, cx);
                 this.form_holder.reset(window, cx);
+                this.reset_auto_review_select(None, window, cx);
                 this.form_label_input.update(cx, |state, cx| {
                     state.set_value(SharedString::from(""), window, cx);
                 });
@@ -692,6 +800,17 @@ impl ProvidersSection {
             serde_json::Value::String(self.form_provider_type.clone()),
         );
         entry.insert("config".to_string(), serde_json::Value::Object(config));
+        if let Some(model) = self
+            .auto_review_select
+            .read(cx)
+            .selected_value()
+            .filter(|model| model.as_str() != REVIEW_WITH_SESSION_MODEL)
+        {
+            entry.insert(
+                "auto_review_model".to_string(),
+                serde_json::Value::String(model.clone()),
+            );
+        }
 
         map.insert(key, serde_json::Value::Object(entry));
 

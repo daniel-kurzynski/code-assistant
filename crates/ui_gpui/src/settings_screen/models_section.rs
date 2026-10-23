@@ -113,6 +113,7 @@ fn api_label(provider_type: &str) -> String {
         label: String::new(),
         provider: provider_type.to_string(),
         config: serde_json::Value::Null,
+        auto_review_model: None,
     };
     ConfigurationSystem::api_client_kind_for_configs(&ModelConfig::new("", ""), &provider)
         .map(|kind| kind.to_string())
@@ -1007,6 +1008,7 @@ mod tests {
                 label: "Anthropic".into(),
                 provider: "anthropic".into(),
                 config: serde_json::json!({}),
+                auto_review_model: None,
             },
         )]
         .into_iter()

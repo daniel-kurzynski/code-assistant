@@ -63,6 +63,22 @@ pub fn permission_options_for(reason: &PermissionRequestReason<'_>) -> Vec<Permi
                 "Skip these servers; the agent runs without them",
             ),
         ],
+        // The auto review flagged this call: a session grant would not skip
+        // later reviews anyway, so there is only this call to decide.
+        PermissionRequestReason::ToolInvocation {
+            concern: Some(_), ..
+        } => vec![
+            PermissionOption::new(
+                PermissionDecision::GrantedOnce,
+                "Allow once",
+                "Run this call despite the review's concern",
+            ),
+            PermissionOption::new(
+                PermissionDecision::Denied,
+                "Deny",
+                "Reject the call; the agent is told not to retry",
+            ),
+        ],
         PermissionRequestReason::ExecuteCommand { .. }
         | PermissionRequestReason::ToolInvocation { .. } => vec![
             PermissionOption::new(
@@ -209,11 +225,17 @@ impl SessionPermissionMediator {
                     "working_dir": working_dir.map(|dir| dir.display().to_string()),
                 }),
             ),
-            PermissionRequestReason::ToolInvocation { params } => (
-                format!("Run tool `{}`", request.tool_name),
+            PermissionRequestReason::ToolInvocation { params, concern } => (
+                match concern {
+                    Some(concern) => {
+                        format!("Run tool `{}`? Auto review: {concern}", request.tool_name)
+                    }
+                    None => format!("Run tool `{}`", request.tool_name),
+                },
                 serde_json::json!({
                     "type": "tool_invocation",
                     "params": params,
+                    "review_concern": concern,
                 }),
             ),
             PermissionRequestReason::TrustLocalMcp {
@@ -307,6 +329,32 @@ impl Drop for RequestGuard<'_> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn a_call_flagged_by_the_auto_review_offers_no_session_grant() {
+        let params = serde_json::json!({});
+        let decisions = |concern| {
+            permission_options_for(&PermissionRequestReason::ToolInvocation {
+                params: &params,
+                concern,
+            })
+            .into_iter()
+            .map(|option| option.decision)
+            .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            decisions(Some("Force-pushes to main.")),
+            [PermissionDecision::GrantedOnce, PermissionDecision::Denied]
+        );
+        assert_eq!(
+            decisions(None),
+            [
+                PermissionDecision::GrantedOnce,
+                PermissionDecision::GrantedSession,
+                PermissionDecision::Denied
+            ]
+        );
+    }
+
     fn data(id: &str) -> ToolPermissionRequestData {
         ToolPermissionRequestData {
             request_id: id.to_string(),
@@ -354,7 +402,10 @@ mod tests {
         let request = PermissionRequest {
             tool_id: None,
             tool_name: "browser_login",
-            reason: PermissionRequestReason::ToolInvocation { params: &params },
+            reason: PermissionRequestReason::ToolInvocation {
+                params: &params,
+                concern: None,
+            },
         };
         // Nobody answers: the prompt denies after the timeout instead of
         // blocking the turn forever, and the pending entry is cleaned up.
@@ -391,7 +442,10 @@ mod tests {
         let request = PermissionRequest {
             tool_id: None,
             tool_name: "send_email",
-            reason: PermissionRequestReason::ToolInvocation { params: &params },
+            reason: PermissionRequestReason::ToolInvocation {
+                params: &params,
+                concern: None,
+            },
         };
         let decision = mediator.request_permission(request).await.unwrap();
         answer.await.unwrap();

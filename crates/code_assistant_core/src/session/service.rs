@@ -3437,7 +3437,10 @@ mod tests {
                 .request_permission(tools_core::PermissionRequest {
                     tool_id: Some("tool-1"),
                     tool_name: "delete_files",
-                    reason: tools_core::PermissionRequestReason::ToolInvocation { params: &params },
+                    reason: tools_core::PermissionRequestReason::ToolInvocation {
+                        params: &params,
+                        concern: None,
+                    },
                 })
                 .await
         });

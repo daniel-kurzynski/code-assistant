@@ -137,6 +137,7 @@ mod tests {
             label: "p".into(),
             provider: kind.into(),
             config,
+            auto_review_model: None,
         }
     }
 

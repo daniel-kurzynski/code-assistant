@@ -194,11 +194,13 @@ impl AgentRuntime {
         // A stop must not wait for the user to answer a permission prompt;
         // dropping the mediator's future settles the prompt as denied.
         let spec = tool.spec();
+        let transcript = || self.review_transcript();
         let check = self.permissions.check(
             self.permission_handler.as_deref(),
             &spec,
             Some(&request.id),
             &request.input,
+            &transcript,
         );
         tokio::select! {
             biased;
