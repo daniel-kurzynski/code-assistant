@@ -1,5 +1,5 @@
 {{- /* A screenshot of the app: {{< screenshot name="permission-menu" alt="…" caption="…" >}}.
      Files: assets/images/app/<name>-light.webp and <name>-dark.webp, taken at 2x. */ -}}
-{{- $name := .Get "name" | default (.Get 0) -}}
+{{- $name := .Get "name" -}}
 <figure class="shot">{{ partial "screenshot.html" (dict "name" $name "alt" (.Get "alt")) }}{{ with .Get "caption" }}<figcaption>{{ . | markdownify }}</figcaption>{{ end }}</figure>
 {{- /* chomp */ -}}
