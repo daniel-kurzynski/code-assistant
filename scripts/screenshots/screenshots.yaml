@@ -1,0 +1,200 @@
+# What scripts/screenshots/capture.py produces.
+#
+# 1. `base` is the mock state every screenshot starts from: the sessions are
+#    created one after another in the real app, talking to a mock Anthropic API
+#    (mock_anthropic.py) that replies with the scripted `turns`. Tools really
+#    run, against the demo projects in fixtures.py.
+# 2. Each entry in `shots` brings the window into a state on top of the base
+#    (which session, sidebar view, right panel, an open menu, a few clicks) and
+#    is captured in the light and the dark theme, then cropped.
+#
+# Coordinates are logical pixels of the window (1600x1000, the top left corner
+# is 0,0); the screen is captured at 2x. Selector and menu positions
+# (capture.py, SELECTORS) assume the right panel is closed.
+
+window: {width: 1600, height: 1000, scale: 2}
+
+base:
+  # Created in this order. `project` is a folder from fixtures.py. The mock
+  # recognises a conversation by its prompt (or `key`) in the first message and
+  # answers request N with turn N. A turn is a list of blocks, or a mapping
+  # with `blocks` and timing options (start, hold in ms; input_tokens).
+  sessions:
+    - id: profile
+      project: web-shop
+      prompt: The sidebar re-renders on every cart change. Find out why.
+      turns:
+        - - text: I'll look at how the sidebar reads the cart store.
+          - tool: name_session
+            input: {title: Profile the sidebar}
+          - tool: search_files
+            input: {project: web-shop, regex: useCart}
+        - - tool: read_files
+            input: {project: web-shop, paths: [src/components/Sidebar.tsx, src/store.ts]}
+        - - text: |-
+              The sidebar subscribes to the whole `items` array:
+
+              ```tsx
+              const items = useCart((s) => s.items);
+              ```
+
+              Every cart change creates a new array, so `Sidebar` re-renders even when no category count changed. Selecting the counts per category with `shallow` equality (or memoizing them in the store) keeps it quiet. Want me to make that change?
+
+    - id: mcp_doc
+      project: api-client
+      prompt: Write a short guide on using the client from an MCP server.
+      turns:
+        - - text: I'll check what the README says so far.
+          - tool: name_session
+            input: {title: Document MCP setup}
+          - tool: read_files
+            input: {project: api-client, paths: [README.md]}
+        - - tool: write_file
+            input:
+              project: api-client
+              path: docs/mcp.md
+              content: |
+                # Using api-client from an MCP server
+
+                Wrap `with_retry` around each tool call so rate-limited calls are retried
+                with backoff instead of failing the whole run.
+        - - text: I added `docs/mcp.md` with a short setup guide and an example of wrapping tool calls in `with_retry`.
+      # Commit the new file, so the Review panel later only shows the retry fix.
+      commit: Add MCP guide
+
+    - id: bump
+      project: web-shop
+      prompt: Check which dependencies are outdated.
+      turns:
+        - - text: Let me check which dependencies are outdated.
+          - tool: name_session
+            input: {title: Bump dependencies}
+          - tool: read_files
+            input: {project: web-shop, paths: [package.json]}
+        - - text: "Three packages have newer minor versions: `vite` 5.0 → 5.4, `vitest` 1.1 → 1.6 and `zustand` 4.4 → 4.5. None of them is a major update. Shall I update them and run the tests?"
+      # Then raise the tier and answer: the command waits for permission.
+      follow_up:
+        permissions: Ask Before Writes
+        message: Yes, update them.
+        turns:
+          - - text: Updating the three packages.
+            - tool: execute_command
+              input: {project: web-shop, command_line: npm install vite@5.4 vitest@1.6 zustand@4.5}
+
+    - id: main
+      project: api-client
+      prompt: The retry test fails about one run in ten. Find out why and fix it.
+      turns:
+        - blocks:
+            - text: I'll start with where the retry delay comes from.
+            - tool: name_session
+              input: {title: Fix flaky retry test}
+            - tool: search_files
+              input: {project: api-client, regex: retry_after}
+          start: 900
+        - - text: The delay between attempts is random jitter of 0–39 ms, but the test expects at least 30 ms over three attempts. With bad luck the sum stays below that. The backoff the function creates is never used. I'll wait for the backoff instead.
+          - tool: edit
+            input:
+              project: api-client
+              path: src/client/retry.rs
+              old_text: "                let jitter = retry_after_jitter();\n                sleep(Duration::from_millis(jitter));"
+              new_text: "                let delay = backoff.next_delay(attempt);\n                sleep(delay);"
+          - tool: edit
+            input:
+              project: api-client
+              path: src/client/retry.rs
+              old_text: "/// Milliseconds to wait when the server sent no `Retry-After` header.\nfn retry_after_jitter() -> u64 {\n    let nanos = Instant::now().elapsed().subsec_nanos() as u64;\n    nanos % 40\n}\n\n"
+              new_text: ""
+        - - text: Long waits should not grow without bound, so I'll cap the backoff.
+          - tool: edit
+            input:
+              project: api-client
+              path: src/client/backoff.rs
+              old_text: "    pub fn next_delay(&mut self, attempt: u32) -> Duration {\n        self.base * 2u32.pow(attempt.saturating_sub(1))\n    }"
+              new_text: "    pub fn next_delay(&mut self, attempt: u32) -> Duration {\n        let delay = self.base * 2u32.pow(attempt.saturating_sub(1).min(16));\n        delay.min(MAX_DELAY)\n    }"
+          - tool: edit
+            input:
+              project: api-client
+              path: src/client/backoff.rs
+              old_text: "use std::time::Duration;\n"
+              new_text: "use std::time::Duration;\n\n/// Never wait longer than this between attempts.\npub const MAX_DELAY: Duration = Duration::from_secs(30);\n"
+        - - text: Now the tests. Meanwhile a sub-agent checks the other retry call sites.
+          - tool: spawn_agent
+            input:
+              instructions: Find every caller of with_retry in api-client and check whether any of them relies on the old jitter delay.
+              background: true
+          - tool: execute_command
+            input: {project: api-client, command_line: cargo test retry}
+        - - text: "Both retry tests pass, and `retries_with_backoff` no longer depends on random timing: three attempts now wait 10 ms and 20 ms, always above the 30 ms the test expects. The sub-agent is still checking the other call sites; I'll tell you if it finds one that relied on the jitter."
+
+  # Sub-agents are recognised by `key` in their instructions. This one never
+  # finishes its first response, so the sub-agent panel shows it running.
+  sub_agents:
+    - id: sub
+      key: caller of with_retry
+      turns:
+        - blocks:
+            - text: I'll search for callers of `with_retry`.
+            - tool: search_files
+              input: {project: api-client, regex: "with_retry\\("}
+          hold: 3600000
+
+# Each shot: the state to bring the window into, then `crop` [x, y, w, h] or
+# `full`. Keys, all optional:
+#   session:  a base session id (selected in the sidebar's Active view)
+#   sidebar:  active | projects
+#   panel:    none | review | files | browser   (the right panel)
+#   scroll:   top | bottom                      (the conversation)
+#   steps:    a list of {click: [x, y]}, {hover: [x, y]}, {wait: seconds};
+#             `once: true` runs a step only for the first theme (for toggles)
+#   menu:     a selector to open: model | effort | worktree | sandbox |
+#             permissions | tools
+#   hover:    [x, y] where the mouse rests for the capture
+#   scale:    output scale for `full` shots (default 2 = the capture's)
+# Output: site/assets/images/app/<name>-light.webp and <name>-dark.webp.
+shots:
+  - name: window
+    session: main
+    sidebar: active
+    panel: review
+    scroll: top
+    steps:
+      - {click: [1089, 233], once: true}   # expand the search card
+    crop: full
+    scale: 1.5
+
+  - name: selectors
+    session: main
+    sidebar: active
+    panel: review
+    crop: [262, 915, 1008, 85]
+
+  - name: permission-request
+    session: bump
+    panel: none
+    crop: [262, 852, 1338, 148]
+
+  - name: permission-menu
+    session: bump
+    panel: none
+    menu: permissions
+    hover: [1295, 918]
+    crop: [1090, 838, 410, 162]
+
+  - name: worktree-menu
+    session: bump
+    panel: none
+    menu: worktree
+    crop: [900, 866, 340, 134]
+
+  - name: tools-menu
+    session: bump
+    panel: none
+    menu: tools
+    crop: [1180, 632, 320, 368]
+
+  - name: model-menu
+    session: bump
+    panel: none
+    menu: model
+    crop: [262, 876, 338, 124]

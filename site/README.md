@@ -81,6 +81,12 @@ at 1.5× and always fills its column). The landing page tour uses `window`; its
 numbered hotspots are placed in percent of that image (`tour.steps` in
 `data/home.yaml`), so move them when the screenshot changes.
 
+The screenshots are generated, not taken by hand: `scripts/screenshots/capture.py`
+runs the app against a mock API and captures the shots listed in
+`scripts/screenshots/screenshots.yaml` (see `scripts/screenshots/README.md`).
+`data/based_on.yaml` records the app commit the guides and the screenshots
+describe, the starting point for the next update.
+
 Keep the wording of buttons and menus identical to the app, so readers can
 find them. When the app changes, the matching page should change in the same
 pull request.

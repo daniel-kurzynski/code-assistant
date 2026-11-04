@@ -161,6 +161,16 @@ Layer 5 (binary):     code_assistant    — CLI, config, feature-gated frontend 
 
 ## Development Notes
 
+### User Documentation Site
+- Hugo site in `site/` (published to GitHub Pages; see `site/README.md`); the
+  design notes in `docs/` are for developers
+- `site/data/based_on.yaml` holds the app commit the guides (`docs`) and the
+  screenshots (`screenshots`) describe; to update the site, start from
+  `git log <commit>..HEAD -- crates Cargo.toml Cargo.lock`
+- Screenshots are generated: `scripts/screenshots/capture.py` runs the app
+  against a mock API with the base state and shots of
+  `scripts/screenshots/screenshots.yaml`; see `scripts/screenshots/README.md`
+
 ### Testing
 - Unit tests distributed across modules; integration tests in `crates/code_assistant/src/tests/`
 - Mock implementations in `code_assistant_core` behind the `test-utils` feature

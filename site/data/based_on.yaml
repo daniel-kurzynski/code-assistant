@@ -1,0 +1,10 @@
+# The app commit (last change under crates/, Cargo.toml, Cargo.lock) that the
+# site describes. To bring the site up to date, look at what changed since:
+#
+#   git log --oneline <docs>..HEAD -- crates Cargo.toml Cargo.lock
+#
+# `docs` is the commit the guide texts were last checked against; set it by
+# hand when you update them. `screenshots` is written by
+# scripts/screenshots/capture.py after it regenerated all screenshots.
+docs: 18e5c094fa569d4ad6d22d1d633207aa3543b57e
+screenshots: 18e5c094fa569d4ad6d22d1d633207aa3543b57e
