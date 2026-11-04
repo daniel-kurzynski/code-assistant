@@ -208,7 +208,8 @@ class Capture:
         self.raw = os.path.join(self.work, "raw")
         self.debug_dir = os.path.join(self.work, "debug")
         self.procs = []
-        self.state = {"theme": "light", "panel": "none", "sidebar": "projects", "session": None,
+        # The right panel is remembered per session: session id -> panel.
+        self.state = {"theme": "light", "panels": {}, "sidebar": "projects", "session": None,
                       "menu": None}
         self.step_no = 0
 
@@ -274,12 +275,15 @@ class Capture:
             self.x.click(*SIDEBAR_TABS[view], wait=1.0)
             self.state["sidebar"] = view
 
+    def panel(self):
+        return self.state["panels"].get(self.state["session"], "none")
+
     def set_panel(self, panel):
-        current = self.state["panel"]
+        current = self.panel()
         if current == panel:
             return
         self.x.click(*PANEL_BUTTONS[current if panel == "none" else panel], wait=2.0)
-        self.state["panel"] = panel
+        self.state["panels"][self.state["session"]] = panel
 
     def select_session(self, session_id):
         if self.state["session"] == session_id:
@@ -293,7 +297,7 @@ class Capture:
         self.state["session"] = session_id
 
     def open_menu(self, name):
-        if self.state["panel"] != "none":
+        if self.panel() != "none":
             raise RuntimeError(f"menu {name}: selector positions assume `panel: none`")
         self.x.click(SELECTORS[name], SELECTOR_Y, wait=1.2)
         self.state["menu"] = name
