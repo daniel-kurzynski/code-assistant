@@ -88,8 +88,10 @@ runs the app against a mock API and captures the shots listed in
 describe, the starting point for the next update.
 
 Keep the wording of buttons and menus identical to the app, so readers can
-find them. When the app changes, the matching page should change in the same
-pull request.
+find them. When the app changes, the matching page and its screenshots should
+change in the same pull request. The `update-docs` skill
+(`.agents/skills/update-docs/SKILL.md`) walks an agent, or you, through it, also
+for catching the whole site up since `data/based_on.yaml`.
 
 ## Enabling Pages
 

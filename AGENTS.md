@@ -162,6 +162,10 @@ Layer 5 (binary):     code_assistant    — CLI, config, feature-gated frontend 
 ## Development Notes
 
 ### User Documentation Site
+- **A pull request that adds or changes something users see or configure
+  (feature, menu, setting, slash command, CLI flag) also updates the user
+  docs in `site/` and the screenshots that show it.** Follow the
+  `update-docs` skill (`.agents/skills/update-docs/SKILL.md`)
 - Hugo site in `site/` (published to GitHub Pages; see `site/README.md`); the
   design notes in `docs/` are for developers
 - `site/data/based_on.yaml` holds the app commit the guides (`docs`) and the
