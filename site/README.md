@@ -76,7 +76,8 @@ without the tabs shows only for visitors who picked that frontend.
 
 Screenshots of the app live in `assets/images/app/` as pairs,
 `<name>-light.webp` and `<name>-dark.webp`, taken at 2× (Retina) scale; they
-are shown at half their pixel width. The landing page tour uses `window`; its
+are shown at half their pixel width (`window`, the full app window, is stored
+at 1.5× and always fills its column). The landing page tour uses `window`; its
 numbered hotspots are placed in percent of that image (`tour.steps` in
 `data/home.yaml`), so move them when the screenshot changes.
 

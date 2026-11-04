@@ -26,8 +26,8 @@ tour:
         own after some idle days or once its branch is merged. Switch to
         Projects to see every session by folder.
       href: docs/organize/sessions/
-      x: 10
-      y: 70
+      x: 8
+      y: 33
       wide: true
     - title: Every tool call, in full
       text: >-
@@ -35,31 +35,31 @@ tour:
         Open one to see what the model got back: the search matches, the diff,
         the command output.
       href: docs/work/conversation/
-      x: 52
-      y: 21
+      x: 70.6
+      y: 25
     - title: Sub-agents above the input
       text: >-
         Sub-agents can run in the background, even after the turn that started
         them has ended. The panel above the input shows each one with its
         running time, a link to its transcript and a Cancel button.
       href: docs/long/sub-agents/
-      x: 62
-      y: 74
+      x: 31
+      y: 85.6
     - title: The selector row
       text: >-
         Everything about this session sits under the input: model, reasoning
         effort, permissions, sandbox, tools and MCP servers, and the worktree.
       href: docs/work/models/
-      x: 64
-      y: 87.5
+      x: 35.3
+      y: 97.2
     - title: Review what changed
       text: >-
         The right panel shows the diff of the working tree or of the branch,
         file by file, and updates while the agent edits. Comment on a line and
         the comment goes with your next message.
       href: docs/work/review/
-      x: 86
-      y: 56
+      x: 91.3
+      y: 10
       wide: true
     - title: Files, browser and voice
       text: >-
@@ -67,8 +67,8 @@ tour:
         rendered) or to watch the agent's browser live. Turn on Voice to talk to
         an assistant that knows all your conversations.
       href: docs/work/browser/
-      x: 56.5
-      y: 0.8
+      x: 75.6
+      y: 2.4
       wide: true
 
 ways:
