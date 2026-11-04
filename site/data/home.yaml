@@ -17,7 +17,7 @@ hero:
   platforms: macOS · Linux · Windows · Native app, terminal, Zed and other ACP editors, MCP server
 
 tour:
-  # x/y place each hotspot on the window drawing, in percent.
+  # x/y place the centre of each hotspot on the window screenshot, in percent.
   steps:
     - title: The inbox
       text: >-

@@ -13,9 +13,10 @@ can work in its own.
 
 ## Switch a session to a worktree
 
-The last dropdown in the selector row is the session's working directory:
+The worktree dropdown in the selector row (it reads *Local* while the session
+works in the project folder) is the session's working directory:
 
-{{< selectors on="⎇ Local" >}}<div class="menu"><div class="cur">Local<small>The project folder</small></div><div>feature/search<small>An existing worktree</small></div><div>New worktree...<small>Create one for a branch</small></div></div>{{< /selectors >}}
+{{< screenshot name="worktree-menu" alt="The worktree dropdown, open: Local, an existing worktree feature/search, and New worktree..." >}}
 
 - **Local**: the project folder itself.
 - An **existing worktree** of the repository.

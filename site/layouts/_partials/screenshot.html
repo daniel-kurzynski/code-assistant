@@ -1,0 +1,9 @@
+{{- /* A screenshot of the app in a light and a dark version; the one matching the site theme shows.
+     Context: dict "name" (files assets/images/app/<name>-light.webp / -dark.webp), "alt", "class" (optional).
+     Images are taken at 2x, so they are shown at half their pixel width at most. */ -}}
+{{- $light := resources.Get (printf "images/app/%s-light.webp" .name) -}}
+{{- $dark := resources.Get (printf "images/app/%s-dark.webp" .name) -}}
+{{- if not (and $light $dark) }}{{ errorf "screenshot %q: missing images/app/%s-light.webp or -dark.webp" .name .name }}{{ end -}}
+{{- range $i, $img := slice $light $dark -}}
+<img class="shot-{{ if eq $i 0 }}light{{ else }}dark{{ end }}{{ with $.class }} {{ . }}{{ end }}" src="{{ $img.RelPermalink }}" width="{{ div $img.Width 2 }}" height="{{ div $img.Height 2 }}" alt="{{ $.alt }}" loading="lazy" decoding="async">
+{{- end -}}

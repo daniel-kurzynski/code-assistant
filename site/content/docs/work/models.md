@@ -13,7 +13,7 @@ frontends: [app, tui, acp]
 Click the model in the selector row under the input. Models are grouped by
 provider. The list shows the models you switched on in **Settings → Models**.
 
-{{< selectors on="Claude Sonnet" />}}
+{{< screenshot name="model-menu" alt="The model dropdown, open, with Claude Sonnet 5.5 checked" >}}
 {{< /fe >}}
 {{< fe "tui" >}}
 {{< term >}}[dim]›[/] /model                                  [dim]# lists the models you can pick[/]

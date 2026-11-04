@@ -75,7 +75,7 @@ next agent run, so you don't need to restart.
 
 ## Turn servers on and off per session
 
-{{< selectors on="Tools" >}}<div class="menu"><div><b style="font-size:11px;color:var(--muted)">MCP SERVERS</b></div><div class="cur">jira ✓<small>12 tools</small></div><div>docs<small>Needs login · Log in</small></div><div><b style="font-size:11px;color:var(--muted)">BUILT-IN</b></div><div class="cur">Browser ✓</div></div>{{< /selectors >}}
+{{< screenshot name="tools-menu" alt="The Tools menu, open: built-in tool groups and MCP servers, one of them waiting for a login" >}}
 
 In the app, the **Tools** menu in the selector row lists the MCP servers and
 the [built-in tool groups](/docs/configure/tools/). Each has a switch. The

@@ -69,9 +69,16 @@ without the tabs shows only for visitors who picked that frontend.
 | `{{< step 1 "Title" >}}…{{< /step >}}` | A numbered step |
 | `{{< callout tip "Title" >}}…{{< /callout >}}` | A note box. Kinds: `note`, `tip`, `warn` |
 | `{{< term >}}…{{< /term >}}` | A terminal transcript. `[dim]…[/]`, `[acc]…[/]`, `[amb]…[/]` color parts of it |
-| `{{< selectors on="Tools" />}}` | The app's selector row, with one selector highlighted. Optional inner HTML is shown below it, for a menu |
-| `{{< permission-request text="…" >}}` | The app's permission banner |
-| `{{< tour >}}` | The annotated window drawing from the landing page, as a numbered list |
+| `{{< screenshot name="tools-menu" alt="…" caption="…" >}}` | A screenshot of the app, in the light or dark version to match the site theme (see below) |
+| `{{< tour >}}` | The annotated window screenshot from the landing page, as a numbered list |
+
+### Screenshots
+
+Screenshots of the app live in `assets/images/app/` as pairs,
+`<name>-light.webp` and `<name>-dark.webp`, taken at 2× (Retina) scale; they
+are shown at half their pixel width. The landing page tour uses `window`; its
+numbered hotspots are placed in percent of that image (`tour.steps` in
+`data/home.yaml`), so move them when the screenshot changes.
 
 Keep the wording of buttons and menus identical to the app, so readers can
 find them. When the app changes, the matching page should change in the same

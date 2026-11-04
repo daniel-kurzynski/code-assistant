@@ -27,7 +27,7 @@ The tier is set per session and applies from the agent's next run.
 {{< fe "app" >}}
 Open the **Permissions** dropdown in the selector row.
 
-{{< selectors on="Ask Before Writes" >}}<div class="menu"><div>Bypass Permissions<small>Never ask</small></div><div>Ask Before Outward Actions<small>Effects that leave this machine</small></div><div class="cur">Ask Before Writes ✓<small>Anything that isn't read-only</small></div><div>Ask For All Tools<small>Every tool call</small></div></div>{{< /selectors >}}
+{{< screenshot name="permission-menu" alt="The Permissions dropdown, open, with Ask Before Writes checked" >}}
 {{< /fe >}}
 {{< fe "tui" >}}
 Run `/permissions` to see the current tier, or give it a new one:
@@ -50,7 +50,7 @@ editor sends `session/set_mode`.
 A banner appears above the input. The session is marked *Needs approval* in
 the inbox, so you notice it even while you're looking at another session.
 
-{{< permission-request text="<code>execute_command</code>: <code>cargo test</code>" >}}
+{{< screenshot name="permission-request" alt="A permission request banner above the input, with Allow once, Always (session) and Deny" >}}
 
 **Always (session)** allows this tool for the rest of the session.
 {{< /fe >}}

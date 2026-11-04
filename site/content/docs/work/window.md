@@ -38,7 +38,7 @@ Your messages, the agent's answers, its reasoning (collapsible) and a card for
 each tool call. Below them is the **composer**: the input with its
 attachments, and the **selector row** with the session's settings:
 
-{{< selectors caption="Model · reasoning effort · permissions · sandbox · tools and MCP servers · working directory (worktree)" />}}
+{{< screenshot name="selectors" alt="The composer with the selector row below it" caption="Model · reasoning effort · working directory (worktree) · sandbox · permissions · tools and MCP servers · context usage" >}}
 
 Above the input, panels appear when they are needed: running **sub-agents**,
 a **permission request**, a **question** from the agent.
