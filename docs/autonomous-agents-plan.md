@@ -2,6 +2,14 @@
 
 Status: proposal (2026-11-13). Nothing here is implemented.
 
+The first scope is smaller and described in `docs/suggested-sessions-plan.md`:
+session templates and suggestions that start an ordinary, pre-filled session
+with one click. This document is where that leads; its "agent definition" is
+that plan's session template with a non-interactive policy, its "automation"
+is a suggestion rule that may run by itself. Only the `architect` and
+`implementer` templates ship at first; the others listed here come with the
+phases that need them.
+
 ## Goal
 
 Agents that start without a user: a rule in the settings says "when *this*
@@ -617,6 +625,12 @@ reach a model that has tools. Defences, in order of weight:
    session the same way. Merge → binding ends, session settles, worktrees go.
 
 ## Plan
+
+Before phase 1: the three steps of `docs/suggested-sessions-plan.md`
+(templates by hand, suggestions, board column and triage). They deliver the
+`github` crate's reading side, the template loader, the filters, triage, the
+decision log and the suggestion UI, so the phases below shrink by those
+parts.
 
 Each phase ships something usable and ends with `cargo test`, `fmt`, `clippy`
 clean and a doc in `docs/`.
