@@ -193,7 +193,7 @@ and cannot override a filter, a limit or a budget. Automations without a
 | Mode | What happens to a candidate that passed |
 | --- | --- |
 | `manual` | nothing on its own; the rule only pre-fills the launcher |
-| `suggest` | a proposal appears in the inbox: "Reviewer would review #57 — touches `migrations/`" with **Run**, **Dismiss**, **Never for this kind** |
+| `suggest` | a proposal appears next to the project's *New session* button (see "Suggested agents"): "Reviewer · #57 — touches `migrations/`", started with a click, or dismissed |
 | `auto` | the run starts |
 
 A dismissal asks for an optional reason and appends it to the automation's
@@ -246,6 +246,70 @@ checkout, so it ships in the first phase and exercises everything a triggered
 run needs — definitions, policy, workspace, sandbox, reporting — while a
 human still makes every "should it run" decision. Rules then automate a
 choice the team has already been making by hand.
+
+### Suggested agents: work that waits for me
+
+The step between picking by hand and rules that run: the app notices work
+that involves *me* and offers the agent for it. Starting stays one click of
+mine, like starting a new session.
+
+An agent definition says when it is worth offering:
+
+```yaml
+# reviewer
+suggest_when: [review_requested_from_me]
+# pr-fixer
+suggest_when: [my_pr_checks_failed, my_pr_changes_requested, my_pr_has_new_comments]
+# architect / implementer
+suggest_when:
+  - issue_assigned_to_me: { labels_any: [agent], board_column: Refinement }
+```
+
+| Condition | Read from GitHub as |
+| --- | --- |
+| `review_requested_from_me` | open PRs with a review request for the `gh` login |
+| `my_pr_checks_failed` | my open PRs whose head commit has a failed check |
+| `my_pr_changes_requested`, `my_pr_has_new_comments` | my open PRs with a review or comments newer than my last push or reply |
+| `issue_assigned_to_me` | open issues assigned to me, optionally by label and column |
+| `mentioned` | comments naming me since the last look |
+
+These are a handful of search queries per project (its repositories are
+known from their remotes), polled while the app is open. "Me" is the `gh`
+login, so this needs no bot account and no rule design: who is assigned,
+asked for a review, or owns the PR is the team's existing way of saying whose
+turn it is. The filters and the decision log apply as everywhere; triage is
+optional here because a human decides.
+
+**In the sidebar.** A project with open suggestions shows a highlighted
+agent icon next to its *New session* button (`sidebar/projects_view.rs`), with
+a count; the header's "+" carries the total. Clicking the icon opens a
+dropdown:
+
+```text
+ ✦ Suggested for shop
+ ─────────────────────────────────────────────────────────
+ Reviewer    #57 Add coupon table        review requested by @maria
+ PR fixer    #52 Cart totals rounding    check "test" failed · 2 new comments
+ Architect   #42 Coupons at checkout     assigned to you · Refinement
+ ─────────────────────────────────────────────────────────
+ New agent run…                          (the launcher)
+```
+
+A click on a row starts that run, with no form: agent, subject, checkout and
+`outputs` come from the definition. Hovering shows the reason and offers
+*Not now* (comes back when the subject changes, e.g. a new push) and *Never
+for this* (logged). A suggestion disappears by itself when its reason does:
+review submitted, checks green, issue unassigned. One subject can list
+several agents; started ones leave the list, and the new session appears in
+the project like any other, with its agent badge.
+
+How the pieces relate: this is the `suggest` mode of the previous section
+with a built-in source ("involves me") and a home in the UI. A team rule in
+`suggest` mode puts its proposals into the same dropdown; a rule in `auto`
+mode skips it. A per-agent switch **Start without asking** turns a personal
+suggestion into an automatic run once it has earned that, which is the
+gentlest route to autonomy: nothing runs that I was not already responsible
+for.
 
 ### Run = session
 
@@ -522,7 +586,8 @@ reach a model that has tools. Defences, in order of weight:
 - **Settings → Automations** (per project): sources, filters, policy text,
   mode, outputs, agent, prompt, report actions, limits; **Dry run** shows
   which open issues and PRs match right now and why, without starting.
-- **Suggestions** in the inbox, and the decision log per automation.
+- **Suggestions** in the dropdown next to *New session* per project, and the
+  decision log per automation.
 - **Sidebar**: automation sessions carry an agent badge and the subject
   (`#42`); new statuses `Queued`, `Blocked`; a filter for "agents only".
   `Blocked` and `Failed` never recede, like `NeedsApproval` today.
@@ -580,7 +645,14 @@ The whole run path with a human making every "should it run" decision.
 - Tests: scripted `MockLLMProvider` runs through `TestCore`; denied tool
   reaches the model as a result; budget cancels; `noop` posts nothing;
   take-over restores chat; picker against the fake client.
-- Acceptance: pick an open PR, get a review draft, post it.
+- Suggested agents: `suggest_when` conditions over "involves me" queries,
+  polled while the app is open; highlighted icon and dropdown next to *New
+  session*; *Not now* / *Never for this*; suggestions withdrawn when their
+  reason goes away; decision log (filters only, no triage yet).
+  `UiEvent::AgentSuggestionsChanged` (app-scoped), suggestions held by a
+  small `SuggestionService` that phase 3 folds into `AutomationService`.
+- Acceptance: pick an open PR, get a review draft, post it; a review request
+  for me lights the icon in that project and one click starts the reviewer.
 
 ### Phase 2 — Workspaces
 
@@ -672,5 +744,5 @@ Looked at on 2026-11-13; product details change quickly.
 | Who moves cards between columns? | Humans; agents only label and comment (configurable later) |
 | Container runtime | `docker` or `podman` CLI, `devcontainer.json` read directly; no dependency on the devcontainer CLI |
 | Chat with a running agent | No; Stop or Take over |
-| First step | Launcher only (phase 1); rules come in `suggest` before `auto` |
+| First step | Launcher and "involves me" suggestions (phase 1); team rules come in `suggest` before `auto` |
 | Who decides whether a PR is worth a review? | Filters, then a small triage model reading the team's policy text, then the agent's own `noop`; every decision logged |
