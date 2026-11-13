@@ -50,8 +50,9 @@ Linux, no container target, no non-interactive permission policy, and
 
 ```text
 AgentDefinition   who: prompt, model, tools, policy, sandbox, budget
-Automation        when: trigger + conditions, in which project, which agent
-TriggerEvent      what happened, normalized, with a subject (issue, PR, schedule)
+Automation        when: sources, filters, policy, mode; in which project, which agent
+Candidate         a subject (issue, PR at a commit, schedule slot) a source puts forward
+Decision          why a candidate ran, was suggested, or was skipped
 Run               one activation = one session (RunRecord), 1..n RunAttempts
 Workspace         the run's own checkout: one worktree per repository
 Subject binding   (repo, issue or PR) -> the session that owns it
@@ -66,6 +67,7 @@ is the body and stays editable as text:
 ---
 name: architect
 description: Turns a ticket into an implementation plan
+subject: issue                        # what it works on: issue | pull_request | branch | none
 model: anthropic/claude-opus-5-5
 effort: high
 tools:
@@ -106,43 +108,144 @@ agents and never widen a policy beyond what the agent definition grants).
 {
   "id": "refine-tickets",
   "project": "shop",
-  "enabled": true,
   "agent": "architect",
-  "trigger": {
-    "type": "github_issue",
-    "repos": ["acme/shop-api", "acme/shop-web"],
-    "when": { "labels_all": ["agent"], "board": { "project": "acme/12", "column": "Refinement" } },
-    "actors": "collaborators"
-  },
+  "mode": "suggest",
+  "sources": [
+    { "type": "github_issue", "repos": ["acme/shop-api", "acme/shop-web"],
+      "when": { "labels_all": ["agent"], "board": { "project": "acme/12", "column": "Refinement" } } }
+  ],
+  "filters": { "actors": "collaborators" },
+  "policy": "Plan tickets that describe a concrete change. Skip epics, questions and tickets without acceptance criteria; say what is missing instead.",
   "prompt": "Write an implementation plan for {{issue.url}} ...",
-  "report": { "on_start": { "add_label": "agent:working" },
+  "outputs": "post",
+  "report": { "on_start": { "react": "eyes", "add_label": "agent:working" },
               "on_success": { "remove_label": "agent:working", "add_label": "agent:planned" },
               "on_blocked": { "add_label": "agent:needs-human" } },
   "limits": { "max_runs_per_day": 20, "max_attempts_per_subject": 2 }
 }
 ```
 
-### Triggers
+### When to act, and when not
 
-| Type | Fires on | Subject |
+A bare event ("a PR was opened") is a poor reason to spend an agent run, and
+"review every PR" produces noise people learn to ignore. So a trigger is not
+one thing but a path with four stops, and every stop leaves a written reason.
+
+```text
+ candidate ──▶ 1 filters ──▶ 2 triage ──▶ 3 mode ──▶ run ──▶ 4 outcome
+ (subject)     harness,      small model,  manual |          done | noop |
+               free          read-only     suggest | auto    blocked | handoff
+      └──────────── every stop writes to the decision log ────────────┘
+```
+
+**Candidates** are subjects, not events: an issue, a pull request at a head
+commit, a schedule slot. Sources put candidates forward:
+
+| Source | Candidate | Human intent |
 | --- | --- | --- |
-| `cron` | schedule (5-field, with time zone), optional catch-up of one missed run | the schedule slot |
-| `manual` | "Run now" in the UI, or `code-assistant agents run <id>` | none or a pasted URL |
-| `github_issue` | issue matches labels / board column / assignee | issue |
-| `github_pull_request` | PR opened, ready for review, review requested, labelled | PR |
-| `github_checks` | a check run or workflow on a PR's head finished failed | PR |
-| `github_review` | review submitted, review comment, PR comment | PR |
-| `github_mention` | `@name` or `/agent <name>` in a comment | issue or PR |
-| later | generic webhook, file watch, "another run finished" | — |
+| launcher (see below) | whatever the user picked | explicit |
+| `github_mention`: `/agent review`, `@name …` in a comment | that issue or PR | explicit |
+| `github_assignment`: issue assigned to, or review requested from, the agent's identity | that issue or PR | explicit |
+| `github_issue` / `github_pull_request`: label, board column, opened, ready for review, pushed | each match | by convention |
+| `github_checks`, `github_review`: failed check, review, comment | the PR | implicit |
+| `cron` | the slot, or a sweep: "all open PRs", "issues untouched for 14 days" | none |
+| later: generic webhook, file watch, "another run finished" | — | — |
 
-**Conditions are states, not edges.** `github_issue` does not mean "a label
+The first three are how people already delegate to each other (ask, assign,
+request a review), need no rule design, and are the right place to start.
+
+**Sources describe states, not edges.** `github_issue` does not mean "a label
 was just added"; it means "the issue is in this state and this automation has
-not handled this state yet". A reconciler compares the observed state with a
-ledger. That choice matters for a desktop app: events that happened while the
-laptop was closed are not lost, a ticket moved out of the column and back in
-fires again (new state epoch), and webhooks and polling can feed the same
-logic. Comment and check triggers use a cursor per subject ("everything after
-the last one this automation consumed") for the same reason.
+not handled this state yet". A reconciler compares what it observes with a
+ledger. On a desktop app that matters: what happened while the laptop was
+closed is not lost, a ticket moved out of a column and back fires again, and
+polling and webhooks feed the same logic. The reconciler also runs the other
+way: when a subject leaves the state that started a run (ticket moved back, PR
+closed), the run is stopped. For pull requests the handled state is the head
+commit, so a review automation chooses one of `once`, `each_push` (debounced
+by a quiet period, reviewing only the new commits) or `on_request`.
+
+**1 — Filters (harness, deterministic, free).** Draft, author (bots, own
+identity, allow/deny list), fork, base branch, labels, changed paths
+(`only: ["src/payments/**"]`, `ignore: ["**/*.lock", "docs/**"]`), diff size
+bounds, already handled at this commit, an open run on the same subject,
+per-user and per-day rate limits, budget left. Each rejection names the rule.
+
+**2 — Triage (small model, read-only, seconds).** The automation's `policy`
+is a short text in the team's words — "review changes to auth, payments and
+migrations in depth; skim the rest; skip dependency bumps and generated
+code". A cheap model gets the policy, the subject's summary (title,
+description, changed files with stats, labels, linked issue) and the
+automation's notes, and returns:
+
+```json
+{ "decision": "act" | "skip" | "ask", "reason": "...", "depth": "quick" | "deep" }
+```
+
+`depth` selects model, effort and budget from the agent definition, so a
+typo fix does not get the same run as a schema migration. `ask` becomes a
+suggestion even in `auto` mode. Triage has no tools, cannot write anywhere,
+and cannot override a filter, a limit or a budget. Automations without a
+`policy` skip this stop.
+
+**3 — Mode: how much the team trusts the rule yet.**
+
+| Mode | What happens to a candidate that passed |
+| --- | --- |
+| `manual` | nothing on its own; the rule only pre-fills the launcher |
+| `suggest` | a proposal appears in the inbox: "Reviewer would review #57 — touches `migrations/`" with **Run**, **Dismiss**, **Never for this kind** |
+| `auto` | the run starts |
+
+A dismissal asks for an optional reason and appends it to the automation's
+notes, which triage reads. A rule is promoted to `auto` when its suggestions
+have stopped being wrong; the UI shows the accept rate to make that visible.
+Explicit sources (launcher, mention, assignment) always run.
+
+The same ladder applies to what a run sends out: `outputs: draft` keeps the
+review, comment or pull request in the session until a human presses
+**Post**; `outputs: post` sends it. Mode and outputs are independent: an
+automatic reviewer whose reviews are posted by hand is a sensible second step.
+
+**4 — Outcome.** A run ends by calling exactly one of `finish(summary)`,
+`noop(reason)`, `report_blocked(reason)` or `handoff(to, note)`. `noop` is a
+success, not a failure: "nothing worth saying about this PR" posts nothing
+(or one reaction), costs little, and is logged. Identity prompts state the
+bar for speaking up.
+
+**The decision log** (`automations/decisions.jsonl`) records every candidate
+with the stop that ended it and the reason:
+
+```text
+#57 Add coupon table      ran      triage: touches migrations/ → deep
+#58 Bump serde to 1.0.219 skipped  filter: author dependabot[bot]
+#59 Fix typo in README    skipped  triage: docs only
+#60 WIP checkout rewrite  skipped  filter: draft
+#61 Refactor cart totals  noop     agent: no findings above the bar
+```
+
+This is the answer to "why did it (not) look at this", shown per automation
+and next to each subject in the launcher, with **Run anyway** on every
+skipped line.
+
+### The launcher: manual first
+
+Before any rule exists, agents are started by hand from the project:
+**New agent run** → pick the agent → the form follows the agent's `subject`.
+
+- `pull_request` (reviewer, pr-fixer): pick the repository (when the project
+  folder holds several), then a pull request from the open list — number,
+  title, author, draft, checks, review state, size, and what the decision log
+  says about it ("reviewed at a1b2c3d, 2 commits since").
+- `issue` (architect, implementer): the open issues, filterable by label and
+  board column.
+- `branch`: a local or remote branch. `none`: only a prompt.
+
+Optional: extra instructions, depth, `outputs: draft | post`. A pasted
+GitHub URL skips the picking. This needs only reading from GitHub and one
+checkout, so it ships in the first phase and exercises everything a triggered
+run needs — definitions, policy, workspace, sandbox, reporting — while a
+human still makes every "should it run" decision. Rules then automate a
+choice the team has already been making by hand.
 
 ### Run = session
 
@@ -173,12 +276,12 @@ Running -> Interrupted (host died) -> new RunAttempt or Failed, per automation
 
 ```text
  GitHub ──poll/webhook──▶ TriggerSource ─┐
- cron ───────────────────▶ TriggerSource ─┼─▶ TriggerEvent
- manual ─────────────────▶               ─┘        │
+ cron ───────────────────▶ TriggerSource ─┼─▶ Candidate
+ launcher ───────────────▶ (skips gates) ─┘        │
                                                     ▼
                       ┌──────────── AutomationService ────────────┐
-                      │ match rules ─▶ Reconciler ─▶ RunQueue      │
-                      │ (pure, agent_orchestration)  (limits, dedupe)
+                      │ Reconciler ─▶ filters ─▶ triage ─▶ mode    │
+                      │ (pure, agent_orchestration)   ─▶ RunQueue  │
                       │                    │                       │
                       │              RunDriver                     │
                       │   1 WorkspaceManager.prepare (worktrees)   │
@@ -202,7 +305,7 @@ Running -> Interrupted (host died) -> new RunAttempt or Failed, per automation
 | `git` | `workspace.rs`: prepare, inspect and remove a multi-repo workspace; map a GitHub repo to a local repo by remote URL |
 | `sandbox` | `ExecutionTarget` (`Host`, `Container`), network policy with an allowlist; Linux backend |
 | `command_executor` | `ContainerCommandExecutor` (same `CommandExecutor` trait, `docker`/`podman exec`) |
-| `agent_orchestration` | `automation` module: `TriggerEvent`, rule matching, reconciler decisions, limit and circuit-breaker state machine — pure, no I/O, exhaustively tested; `RunStore` trait |
+| `agent_orchestration` | `automation` module: candidates, filters, reconciler and mode decisions, limit and circuit-breaker state machine — pure, no I/O, exhaustively tested; `RunStore` trait |
 | `code_assistant_core` | `automation/`: `AutomationService`, `RunDriver`, `WorkspaceManager`, `Reporter`, config loading, JSON `RunStore`; `agents/`: definition loader and bundled templates; `tools/impls/github/`; `session/permissions`: `PolicyMediator` |
 | `ui_gpui` | *Settings → Agents*, *Settings → Automations*, runs view, sidebar treatment |
 | `code_assistant` | `agents` subcommand (headless host, `run`, `list`, `dry-run`) |
@@ -385,6 +488,13 @@ take-over.
   automation; a cap on fix rounds per PR.
 - Staleness: if the subject leaves the triggering state mid-run (ticket moved
   back, PR closed), the run is cancelled or allowed to finish, per automation.
+- Stall detection: a run with no agent event for N minutes is stopped and
+  retried with backoff as a new attempt.
+- Concurrency can also be capped per board column, so ten tickets dropped
+  into *Implementation* do not start ten implementers.
+- Notes per automation (`automations/<id>/notes.md`): what the team told it
+  by dismissing suggestions or overruling it. Written only from human
+  feedback through the host, never by a run that read untrusted text.
 - A global kill switch pauses all automations and stops running ones.
 
 ### Untrusted input
@@ -408,9 +518,11 @@ reach a model that has tools. Defences, in order of weight:
 - **Settings → Agents**: list, "New from template", editor for front matter
   fields (model, effort, tool groups, MCP servers, GitHub rights, sandbox,
   budget) and the prompt.
-- **Settings → Automations** (per project): trigger builder, agent picker,
-  prompt with placeholders, report actions, limits; **Dry run** shows which
-  open issues and PRs match right now and what would start, without starting.
+- **New agent run** (launcher) in the project: agent, then a subject picker.
+- **Settings → Automations** (per project): sources, filters, policy text,
+  mode, outputs, agent, prompt, report actions, limits; **Dry run** shows
+  which open issues and PRs match right now and why, without starting.
+- **Suggestions** in the inbox, and the decision log per automation.
 - **Sidebar**: automation sessions carry an agent badge and the subject
   (`#42`); new statuses `Queued`, `Blocked`; a filter for "agents only".
   `Blocked` and `Failed` never recede, like `NeedsApproval` today.
@@ -444,18 +556,31 @@ reach a model that has tools. Defences, in order of weight:
 Each phase ships something usable and ends with `cargo test`, `fmt`, `clippy`
 clean and a doc in `docs/`.
 
-### Phase 1 — Agent definitions and unattended runs (no triggers)
+### Phase 1 — Agents started by hand
 
-- `agents/` loader (front matter + body), bundled templates, snapshot into
-  the session; identity prompt through `plugins/system_prompt.rs`.
+The whole run path with a human making every "should it run" decision.
+
+- `agents/` loader (front matter + body, `subject`), bundled templates
+  `reviewer` and `architect`, snapshot into the session; identity prompt
+  through `plugins/system_prompt.rs`.
 - `SessionConfig::origin` / `agent`; `PolicyMediator`; `ask_question` left
-  out; `report_blocked` tool.
+  out; outcome tools `finish`, `noop`, `report_blocked`, `handoff`.
 - `RunDriver` on `start_turn_if_idle`, JSON `RunStore`, budgets via cancel,
-  `Interrupted` on startup for runs left `Running`.
-- `manual` trigger: "Run agent…" in GPUI and `code-assistant agents run`.
+  stall detection, `Interrupted` on startup for runs left `Running`.
+- `github` crate, reading only: `GitHubClient`, `GhCliClient`, list open
+  pull requests and issues, read one with diff, comments and checks;
+  recorded-response fake for tests.
+- Launcher in GPUI (**New agent run**, subject pickers) and
+  `code-assistant agents run <agent> <url>`.
+- Checkout for a picked PR: one worktree at the PR head with today's
+  `git::worktree` (the multi-repository workspace comes in phase 2).
+- `outputs: draft` only: the review or plan stays in the session with a
+  **Post** button (`github_submit_review`, `github_comment`, host-side).
 - Input locked for automation sessions; Stop and Take over.
 - Tests: scripted `MockLLMProvider` runs through `TestCore`; denied tool
-  reaches the model as a result; budget cancels; take-over restores chat.
+  reaches the model as a result; budget cancels; `noop` posts nothing;
+  take-over restores chat; picker against the fake client.
+- Acceptance: pick an open PR, get a review draft, post it.
 
 ### Phase 2 — Workspaces
 
@@ -464,35 +589,44 @@ clean and a doc in `docs/`.
 - `SessionConfig::workspace`; `WorkspaceManager`; setup command; cleanup in
   the lifecycle sweep with the "unpushed work" guard.
 - Seatbelt profile: gitdir/object-store writable, hooks and config not.
+- Templates `implementer`, `pr-fixer`; `publish_branch`,
+  `create_pull_request`, still started from the launcher.
 - Tests: temp repositories — single repo, folder of repos, dirty cleanup
   refused, two parallel workspaces of one project.
 
-### Phase 3 — Automations, cron, the host
+### Phase 3 — Rules that suggest
 
-- `agent_orchestration::automation`: events, matching, reconciler, limits,
-  circuit breaker (pure; table-driven tests including downtime catch-up).
-- `AutomationService`, `automations.json`, run queue, host lock, kill switch.
-- `cron` trigger; `agents serve` headless host.
-- *Settings → Agents* and *Settings → Automations*, runs view, sidebar badge
-  and statuses, `UiEvent::AutomationRunsChanged`.
+- `agent_orchestration::automation`: candidates, filters, reconciler, limits,
+  circuit breaker (pure; table-driven tests including downtime catch-up and
+  "subject left the state").
+- `AutomationService`, `automations.json`, `Poller` with ETags and backoff,
+  host lock, kill switch, decision log.
+- Sources `github_pull_request`, `github_issue` (labels; board column via
+  Projects v2 GraphQL), `github_mention`; filters; modes `manual` and
+  `suggest`; proposals in the inbox with Run / Dismiss / Never.
+- Triage step with `policy`, `depth`, notes from dismissals.
+- *Settings → Agents* and *Settings → Automations* with dry run, decision
+  log view with **Run anyway**, accept rate per automation.
+- Acceptance: with a reviewer rule in `suggest`, a docs-only PR and a
+  dependency bump are logged as skipped with reasons, a migration PR is
+  proposed as `deep`.
 
-### Phase 4 — GitHub: tickets
+### Phase 4 — Rules that run
 
-- `github` crate: `GitHubClient`, `GhCliClient`, recorded-response fake for
-  tests; `Poller` with ETags and backoff; Projects v2 status via GraphQL.
-- `github_issue` and `github_mention` triggers, actor checks, dry run.
-- Tools `github_read`, `github_comment`, `github_update_issue`, subject
-  scoping, markers; `Reporter`; audit log; tagged external data.
+- Mode `auto`, `outputs: post`, run queue with per-subject and per-column
+  concurrency, `Reporter` (reaction, labels, status comment), markers, audit
+  log, tagged external data, actor checks.
+- `cron` source including sweeps; `agents serve` headless host.
+- Runs view, sidebar badge and statuses, `UiEvent::AutomationRunsChanged`.
 - Acceptance: the refinement flow above, steps 1–5, against a test repository.
 
-### Phase 5 — GitHub: pull requests
+### Phase 5 — Pull requests that look after themselves
 
-- `publish_branch`, `create_pull_request`, `github_submit_review`,
-  `github_reply_review_thread`; multi-repo linked PRs.
 - Subject bindings, event delivery into bound sessions with batching, parked
-  runs, fix-round cap.
-- `github_pull_request`, `github_checks`, `github_review` triggers; templates
-  `implementer`, `reviewer`, `pr-fixer`.
+  runs, fix-round cap; `github_reply_review_thread`; multi-repo linked PRs.
+- Sources `github_checks`, `github_review`, `github_assignment` (needs the
+  separate identity); review cadence `once` / `each_push` / `on_request` with
+  incremental review.
 - Acceptance: steps 6–7.
 
 ### Phase 6 — Stronger isolation
@@ -513,6 +647,20 @@ graph (ROADMAP "optional work graphs").
 Phase 6 can move ahead of phase 5 if isolation matters more than PR flows;
 they do not depend on each other.
 
+## What others do
+
+Looked at on 2026-11-13; product details change quickly.
+
+| Product | Taken from it |
+| --- | --- |
+| [OpenAI Symphony](https://raw.githubusercontent.com/openai/symphony/main/SPEC.md) | The tracker is the state machine: issues in `active_states` with `required_labels` are eligible; every poll tick reconciles first and stops a run whose issue left its state; per-state concurrency; stall timeout; backoff; the orchestrator only reads, the agent writes through host-side tools that keep the token; runs end in a hand-off state such as *Human Review* |
+| [GitHub Agentic Workflows](https://github.github.com/gh-aw/reference/frontmatter/) | Markdown + front matter per workflow; a pre-activation step that cancels before the agent starts (actor, rate limit per user, daily credit cap); an experimental `skip-if-decision` gate; `noop` as a recorded outcome; ["safe outputs"](https://github.github.com/gh-aw/reference/safe-outputs/) — the agent proposes, a separate step with limits performs the write |
+| [Cursor Automations](https://cursor.com/docs/cloud-agent/automations) | Several triggers per automation; no fork PRs; memory notes per automation (with a warning about untrusted input); run as "me" or as a service account; "do nothing" left to the prompt, which is the gap the outcome tools and triage close here |
+| [Greptile](https://www.greptile.com/docs/code-review-bot/trigger-code-review.md), CodeRabbit | Review filters by label, branch, author, keyword and path; drafts off by default; incremental re-review of new commits; a review tier chosen per PR |
+| [GitHub Copilot coding agent](https://docs.github.com/en/copilot/using-github-copilot/coding-agent/using-copilot-to-work-on-an-issue) | Assignment as the trigger; an 👀 reaction as the first sign of life; later issue comments are not picked up, follow-ups go on the PR |
+| [OpenHands resolver](https://docs.openhands.dev/usage/how-to/github-action) | A label for "take the whole issue", a mention for "answer this comment" |
+| [Claude Code routines](https://code.claude.com/docs/en/routines) | Schedule, API and GitHub triggers combinable on one routine; hourly caps on events |
+
 ## Decisions to confirm
 
 | Question | Proposed |
@@ -524,3 +672,5 @@ they do not depend on each other.
 | Who moves cards between columns? | Humans; agents only label and comment (configurable later) |
 | Container runtime | `docker` or `podman` CLI, `devcontainer.json` read directly; no dependency on the devcontainer CLI |
 | Chat with a running agent | No; Stop or Take over |
+| First step | Launcher only (phase 1); rules come in `suggest` before `auto` |
+| Who decides whether a PR is worth a review? | Filters, then a small triage model reading the team's policy text, then the agent's own `noop`; every decision logged |
