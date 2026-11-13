@@ -947,6 +947,10 @@ impl Gpui {
                 *self.mcp_server_statuses.lock().unwrap() = statuses;
                 cx.refresh();
             }
+            UiEvent::SuggestionsChanged { snapshot } => {
+                *self.suggestions.lock().unwrap() = snapshot;
+                cx.refresh();
+            }
             UiEvent::UpdateBuiltinTools { groups } => {
                 debug!(
                     "UI: UpdateBuiltinTools event with {} group(s)",

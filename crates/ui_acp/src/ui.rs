@@ -1035,6 +1035,9 @@ impl UserInterface for ACPUserUI {
             UiEvent::UpdateStateChanged { .. } => {
                 // Only the GPUI app updates itself.
             }
+            UiEvent::SuggestionsChanged { .. } => {
+                // Suggested sessions are shown by the GPUI sidebar only.
+            }
         }
         Ok(())
     }

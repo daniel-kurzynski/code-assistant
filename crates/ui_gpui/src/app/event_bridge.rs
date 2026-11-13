@@ -33,6 +33,8 @@ impl Gpui {
                         if let Some(session_id) = gpui.get_current_session_id() {
                             gpui.cmd_load_session(session_id, None);
                         }
+                        // App-scoped state the lag may have swallowed.
+                        gpui.cmd_load_suggestions();
                     }
                     Err(StreamError::Closed) => {
                         debug!("Event stream closed — bridge stopped");

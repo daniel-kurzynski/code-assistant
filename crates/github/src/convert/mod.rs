@@ -7,6 +7,7 @@ pub(crate) mod candidates;
 pub(crate) mod checks;
 pub(crate) mod detail;
 pub(crate) mod files;
+pub(crate) mod issues;
 pub(crate) mod list;
 pub(crate) mod review;
 

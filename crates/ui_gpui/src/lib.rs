@@ -223,6 +223,9 @@ pub struct Gpui {
     // Current worktree state (branches + worktrees listing from backend)
     current_worktree_data: Arc<Mutex<Option<WorktreeData>>>,
 
+    // Suggested sessions (app-scoped), shown behind the sidebar's light bulb.
+    suggestions: Arc<Mutex<code_assistant_core::suggestions::SuggestionsSnapshot>>,
+
     // Review panel state (changed-files listing + selected-file diff) mirrored
     // from the backend for the ReviewView to read during render. The u64 is a
     // generation counter bumped on every write so the view can detect changes
@@ -581,6 +584,7 @@ impl Gpui {
 
             // Current worktree state
             current_worktree_data: Arc::new(Mutex::new(None)),
+            suggestions: Arc::new(Mutex::new(Default::default())),
             current_review_listing: Arc::new(Mutex::new((0, None))),
             current_review_diff: Arc::new(Mutex::new((0, None))),
             review_scan_epoch: Arc::new(std::sync::atomic::AtomicU64::new(0)),

@@ -171,6 +171,12 @@ pub fn run(config: AgentRunConfig) -> Result<()> {
                 code_assistant_core::session::lifecycle::run_lifecycle_sweeper(service.clone()),
             );
 
+            // Suggested sessions: session templates matched against the
+            // projects' GitHub issues and pull requests (sidebar light bulb).
+            tokio::spawn(code_assistant_core::suggestions::run_suggestion_refresher(
+                service.clone(),
+            ));
+
             // Long-unused sessions settle before the first listing, in one
             // write, so the sidebar does not paint them only to sweep them.
             if let Err(e) = manager_for_mcp.lock().await.settle_inactive(

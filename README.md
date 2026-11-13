@@ -94,6 +94,9 @@ A handful of things we care about:
   type) to test web apps, with a human-in-the-loop login handoff so it acts as
   you without ever seeing your credentials.
 - **Skills:** reusable, task-specific playbooks the agent can load on demand.
+- **Suggested sessions:** session templates matched against your GitHub (or
+  GitHub Enterprise) issues and pull requests; one click opens a prepared
+  session for the ticket — see [the setup guide](docs/suggested-sessions-setup.md).
 - **Auto-loaded guidance:** picks up `AGENTS.md` (or `CLAUDE.md`) from your
   project root to align with repo-specific instructions.
 

@@ -1,7 +1,21 @@
 # Suggested sessions
 
-Status: proposal (2026-11-13). Nothing here is implemented. This is the first
-scope on the way to `docs/autonomous-agents-plan.md` and can stand alone.
+Status: a prototype is implemented (2026-11-13), see
+`docs/suggested-sessions.md` for what it does and how to configure it. The
+section "Prototype" at the end lists what of this plan it covers. This is
+the first scope on the way to `docs/autonomous-agents-plan.md` and can stand
+alone.
+
+Decided since the first draft:
+
+- **Nothing is bundled.** No preconfigured templates; the user writes them.
+- **GitHub as the pull request view reads it**: through its `github::Client`
+  (token from `GH_TOKEN` / `gh auth token`, GitHub Enterprise endpoints,
+  rate limits), extended by an issue search, single issues and board
+  placements. Each repository's remote names its server.
+- **A light bulb, not the "+" popover.** Suggestions get their own button
+  left of "+", shown only while there are some and highlighted while one is
+  unseen.
 
 ## What it is
 
@@ -75,7 +89,7 @@ anything. Have a sub-agent review the plan, then add it to the ticket as a
 section "Plan" and summarise open questions here.
 ```
 
-The second bundled template:
+A second example:
 
 ```markdown
 ---
@@ -96,11 +110,11 @@ suggest:
 Implement {{issue.url}} following the plan in the ticket. ...
 ```
 
-Only `architect` and `implementer` ship. They are installed as editable
-copies on first use, so an app update never changes a prompt silently.
+Nothing ships: templates are the user's own files.
 
-**Where they live**, later wins by name: bundled → `<config_dir>/session-templates/*.md`
-→ `<project>/.code-assistant/session-templates/*.md`. Project files are
+**Where they live**, later wins by name: `<config_dir>/session-templates/*.md`
+→ `<project>/.code-assistant/session-templates/*.md` (the prototype reads only
+the first). Project files are
 trust-gated like `.mcp.json`, because a template chooses permission tier and
 sandbox. A template outside a project folder applies to every project unless
 it says `projects: [shop]`.
@@ -195,58 +209,58 @@ with its result and reason. The settings show it per template, which is how
 
 ## Reading GitHub
 
-Through `gh`, like `session/pull_request.rs` today; no token handling of our
-own, and "me" is the `gh` login. One query per rule and repository group
-(`gh api` search for issues and pull requests; `gh api graphql` for the board
-column, which needs the `read:project` scope on the `gh` login — when it is
-missing the rule shows that, with the command to add it).
+Through the client the pull request view uses (`github::Client`, see
+`docs/pull-request-view.md`): the same token lookup (`GH_TOKEN` /
+`GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN` for the `GH_HOST` server, else
+`gh auth token --hostname <host>`), the same endpoints for github.com,
+GHE.com and Enterprise servers, the same rate limits and request slots. The
+app stores no token, and "me" is the token's login. A project's repositories
+are found as that view finds a session's (`pull_requests::github_checkouts`).
 
-Refreshed when the app starts, when the "+" popover opens (if older than a
-minute), every five minutes while the window is active, and on a refresh
-button. No webhooks, no background host: suggestions only exist while the
-app is open, which is fine because they wait for a click anyway.
+One search query per rule and server; the board column through GraphQL,
+which needs the `read:project` scope — when it is missing the problem says
+so, with the command to add it.
 
-When `gh` is missing or logged out, templates still work by hand; the
-popover says why there are no suggestions.
+Refreshed when the app starts, every five minutes while it runs, and on the
+list's refresh button. No webhooks, no background host: suggestions only
+exist while the app is open, which is fine because they wait for a click
+anyway.
 
 ## UI
 
-**The "+" popover** (`sidebar/project_picker.rs`) lists the projects as it
-does today. A project with suggestions gets them underneath:
+**The light bulb**, left of the sidebar's "+", shows only while there are
+suggestions; it lights up and carries a dot while one is unseen. It opens
+the list, grouped by project:
 
 ```text
- New session in…
+ Suggested sessions                                  ⟳
  ─────────────────────────────────────────────────────
- shop                                              ⏎
-   ✦ Architect     #42 Coupons at checkout
-   ✦ Implementer   #38 Round cart totals
-   ✦ Architect     #45 Export orders as CSV
- pal
- code-assistant
-   ✦ Implementer   #291 Suggested sessions
+ ▸ shop
+ •  architect    #42 Coupons at checkout
+                 acme/shop-api · assigned to you · Refinement
+    implementer  #38 Round cart totals
+                 acme/shop-web · assigned to you · Implementation
+ ▸ code-assistant
+ •  implementer  #291 Suggested sessions
  ─────────────────────────────────────────────────────
 ```
 
-- Clicking a project row starts an empty session, as today.
 - Clicking a suggestion creates the session from the template and opens it
   with the first message in the input (or sent, with `send: true`).
 - Hovering a suggestion shows the reason (rule or triage) and two actions:
   *Not now* (returns when the subject changes) and *Never for this*.
 - More than five per project collapse into "3 more…".
 
-**Hints that there is something**: the "+" button carries a dot while any
-suggestion is unseen; in the project folders view the per-project *New
-session* button (`sidebar/projects_view.rs`) is highlighted and opens the
-same list for that project.
+**Seen**: opening the list marks what is in it as seen; what was new keeps
+its dot until the list closes.
 
-**From a template by hand**: the popover's project rows get a small menu,
+**From a template by hand**: the "+" popover's project rows get a small menu,
 *From template…* → template → for `subject: issue | pull_request` a picker
 of the open ones (or a pasted URL). Same result as a suggestion. This also
 covers templates with `subject: none`, which are just saved session setups.
 
-**Settings → Templates**: the list with source (bundled copy, user,
-project), validation errors, *Open file*, *Reveal folder*, *New from
-`architect` / `implementer`*, the triage model, and the decision log. A form
+**Settings → Templates**: the list with source (user, project), validation
+errors, *Open file*, *Reveal folder*, the triage model, and the decision log. A form
 editor is not in this scope; the file is the editor.
 
 **Session**: the row shows the subject (`#42`) next to the title. Nothing
@@ -256,8 +270,8 @@ else differs from a normal session.
 
 | Crate | Addition |
 | --- | --- |
-| `github` (new, layer 0) | `GitHubClient` trait; `GhCliClient` over `gh api`; issue, pull request and board-item types; search queries; recorded-response fake. `session/pull_request.rs` can move onto it later |
-| `code_assistant_core::session_templates` | loader (three locations, trust), front matter types, validation, placeholder rendering, bundled `architect` and `implementer` |
+| `github` (the pull request view's client) | issue search, single issue or pull request, board placements (`ops/issues.rs`) |
+| `code_assistant_core::session_templates` | loader (two locations, trust), front matter types, validation, placeholder rendering |
 | `code_assistant_core::suggestions` | `SuggestionService`: refresh loop, rule matching, filters, triage with cache, state file, decision log |
 | `code_assistant_core::session` | `SessionConfig::created_from`; `SessionService` methods below; `UiEvent::SuggestionsChanged` (app-scoped) |
 | `ui_gpui` | popover list, button hints, *From template…* picker, settings section, subject on the session row |
@@ -292,11 +306,11 @@ says so.
 
 ### Step 1 — Templates by hand
 
-- Loader, validation, placeholders, bundled `architect` and `implementer`.
+- Loader, validation, placeholders.
 - `SessionConfig::created_from`; `start_from_template`; draft pre-fill;
   notices for unknown model / server / tool group; worktree option.
-- *From template…* with a pasted issue or pull request URL (resolved with
-  `gh`), *Settings → Templates* list with errors.
+- *From template…* with a pasted issue or pull request URL (resolved
+  through the API), *Settings → Templates* list with errors.
 - Tests: front matter round trips and error messages; every placeholder;
   config mapping through `TestCore` (tier, sandbox, MCP and tool selection,
   model, effort); `MainScreenTest` for the pre-filled input.
@@ -305,7 +319,7 @@ says so.
 
 ### Step 2 — Suggestions
 
-- `github` crate with `GhCliClient` and the fake; repository → remote mapping.
+- `github` crate with the API client and a fake; repository → remote mapping.
 - `SuggestionService`: `issues` / `pull_requests`, filters without `board`,
   refresh triggers, dismissals, "already has a session", decision log,
   `UiEvent::SuggestionsChanged`.
@@ -339,4 +353,18 @@ files. See `docs/autonomous-agents-plan.md`.
 | Pre-fill or send? | Pre-fill by default, `send: true` per template |
 | Does the template carry a system prompt? | No, only the first message; project instructions (`AGENTS.md`) apply as in any session |
 | Worktree for a project folder with several repositories | Only in the subject's repository for now; the multi-repository workspace is part of the autonomous plan |
-| Suggest for work that is not mine? | The filters allow it (`assignee: any`); the bundled templates use `assignee: me` |
+| Suggest for work that is not mine? | The filters allow it (`assignee: any`) |
+
+## Prototype
+
+What the prototype of 2026-11-13 covers:
+
+- Step 1 in the core (`start_from_template`, placeholders, setup mapping,
+  worktree, notices); in the UI only through suggestions — no *From
+  template…* menu and no *Settings → Templates* yet. Templates come from the
+  config folder only; project-level templates wait for the trust prompt.
+  No `SessionConfig::created_from`: the suggestion store remembers which
+  session a suggestion became.
+- Step 2 completely, with the light bulb instead of the "+" popover, and
+  without the decision log (problems show in the list and the log).
+- Step 3's board column; triage is not implemented.

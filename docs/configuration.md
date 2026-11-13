@@ -185,6 +185,14 @@ over HTTP (streamable transport):
 }
 ```
 
+## Suggested sessions — `session-templates/`
+
+Session templates in `<config_dir>/session-templates/*.md` describe a
+prepared session and when to offer it for a GitHub issue or pull request.
+GitHub is reached as for the pull request view (`gh auth login`, also for
+GitHub Enterprise hosts). Step by step: [suggested-sessions-setup.md](suggested-sessions-setup.md);
+every option: [suggested-sessions.md](suggested-sessions.md).
+
 ## Advanced CLI options
 
 <details>

@@ -7,6 +7,7 @@ pub(crate) mod checks;
 mod detail;
 mod diff;
 mod files;
+mod issues;
 mod list;
 mod stacks;
 mod workflows;

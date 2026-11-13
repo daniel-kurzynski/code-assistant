@@ -12,6 +12,7 @@ mod project_order;
 mod project_picker;
 mod projects_view;
 mod session_item;
+mod suggestion_list;
 
 pub use session_item::{SessionListItem, SessionListItemEvent};
 
@@ -20,6 +21,7 @@ use crate::shared::settings::SidebarView;
 use code_assistant_core::persistence::ChatMetadata;
 use code_assistant_core::session::instance::SessionActivityState;
 use code_assistant_core::session::lifecycle::{AwaitingUser, SessionLifecycle};
+use code_assistant_core::suggestions::SuggestionsSnapshot;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::popover::Popover;
 use gpui_kit::component::scroll::ScrollableElement;
@@ -33,6 +35,7 @@ use project_picker::{ProjectPicker, ProjectPickerEvent, animated_surface};
 use projects_view::ProjectFolder;
 use std::collections::{HashMap, HashSet};
 use std::time::SystemTime;
+use suggestion_list::{SuggestionList, SuggestionListEvent};
 use tracing::debug;
 
 /// The sidebar's width, which follows the UI font size. Whole pixels, like
@@ -61,6 +64,14 @@ pub enum SessionSidebarEvent {
     AddProjectRequested,
     /// User saved a temporary project to projects.json
     PersistProjectRequested { project_name: String },
+    /// User picked a suggested session.
+    StartSuggestion { id: String },
+    /// User put a suggestion away, for now or for good.
+    DismissSuggestion { id: String, never: bool },
+    /// User asked for the suggestions to be fetched again.
+    RefreshSuggestions,
+    /// The suggestion list was opened while these were in it.
+    SuggestionsSeen { ids: Vec<String> },
 }
 
 pub struct SessionSidebar {
@@ -87,6 +98,10 @@ pub struct SessionSidebar {
     /// The header's project picker for new sessions.
     project_picker: Entity<ProjectPicker>,
     picker_open: bool,
+    /// Suggested sessions behind the light bulb, left of "+".
+    suggestions: SuggestionsSnapshot,
+    suggestion_list: Entity<SuggestionList>,
+    suggestions_open: bool,
 
     selected_session_id: Option<String>,
     focus_handle: FocusHandle,
@@ -98,12 +113,16 @@ pub struct SessionSidebar {
     awaiting_user: HashMap<String, AwaitingUser>,
     _item_subscriptions: Vec<Subscription>,
     _picker_subscription: Subscription,
+    _suggestion_subscription: Subscription,
 }
 
 impl SessionSidebar {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let project_picker = cx.new(|cx| ProjectPicker::new(window, cx));
         let picker_subscription = cx.subscribe(&project_picker, Self::on_project_picker_event);
+        let suggestion_list = cx.new(|_| SuggestionList::new());
+        let suggestion_subscription =
+            cx.subscribe(&suggestion_list, Self::on_suggestion_list_event);
         let settings = cx
             .try_global::<crate::UiSettingsGlobal>()
             .map(|settings| settings.0.sidebar.clone())
@@ -123,6 +142,9 @@ impl SessionSidebar {
             persisted_projects: HashSet::new(),
             project_picker,
             picker_open: false,
+            suggestions: SuggestionsSnapshot::default(),
+            suggestion_list,
+            suggestions_open: false,
             selected_session_id: None,
             focus_handle: cx.focus_handle(),
             activity_states: HashMap::new(),
@@ -131,6 +153,7 @@ impl SessionSidebar {
             awaiting_user: HashMap::new(),
             _item_subscriptions: Vec::new(),
             _picker_subscription: picker_subscription,
+            _suggestion_subscription: suggestion_subscription,
         }
     }
 
@@ -398,6 +421,121 @@ impl SessionSidebar {
         cx.notify();
     }
 
+    /// The suggested sessions as the core sees them. The light bulb shows
+    /// only while there are some; it lights up while one is unseen.
+    pub fn set_suggestions(&mut self, snapshot: SuggestionsSnapshot, cx: &mut Context<Self>) {
+        if self.suggestions == snapshot {
+            return;
+        }
+        if snapshot.suggestions.is_empty() {
+            self.suggestions_open = false;
+        }
+        self.suggestions = snapshot.clone();
+        self.suggestion_list
+            .update(cx, |list, cx| list.set_snapshot(snapshot, cx));
+        cx.notify();
+    }
+
+    fn set_suggestions_open(&mut self, open: bool, cx: &mut Context<Self>) {
+        if self.suggestions_open == open {
+            return;
+        }
+        self.suggestions_open = open;
+        if open {
+            self.suggestion_list.update(cx, |list, cx| list.opened(cx));
+            let unseen: Vec<String> = self
+                .suggestions
+                .suggestions
+                .iter()
+                .filter(|s| !s.seen)
+                .map(|s| s.id.clone())
+                .collect();
+            if !unseen.is_empty() {
+                cx.emit(SessionSidebarEvent::SuggestionsSeen { ids: unseen });
+            }
+        }
+        cx.notify();
+    }
+
+    fn on_suggestion_list_event(
+        &mut self,
+        _: Entity<SuggestionList>,
+        event: &SuggestionListEvent,
+        cx: &mut Context<Self>,
+    ) {
+        match event {
+            SuggestionListEvent::Start { id } => {
+                self.suggestions_open = false;
+                cx.emit(SessionSidebarEvent::StartSuggestion { id: id.clone() });
+            }
+            SuggestionListEvent::Dismiss { id, never } => {
+                cx.emit(SessionSidebarEvent::DismissSuggestion {
+                    id: id.clone(),
+                    never: *never,
+                });
+            }
+            SuggestionListEvent::Refresh => cx.emit(SessionSidebarEvent::RefreshSuggestions),
+        }
+        cx.notify();
+    }
+
+    fn render_suggestions_button(&self, cx: &mut Context<Self>) -> Option<impl IntoElement> {
+        let count = self.suggestions.suggestions.len();
+        if count == 0 {
+            return None;
+        }
+        let unseen = self.suggestions.has_unseen();
+        let list = self.suggestion_list.clone();
+        let sidebar = cx.entity().downgrade();
+        let icon = Icon::default()
+            .path(SharedString::from("icons/lightbulb.svg"))
+            .with_size(Size::Medium)
+            .when(unseen, |icon| icon.text_color(cx.theme().warning));
+        let tooltip = if count == 1 {
+            "1 suggested session".to_string()
+        } else {
+            format!("{count} suggested sessions")
+        };
+        Some(
+            div()
+                .relative()
+                .debug_selector(|| "suggestions-button".to_string())
+                .child(
+                    Popover::new("suggestions-popover")
+                        .anchor(gpui_kit::Anchor::TopRight)
+                        .trigger(
+                            Button::new("suggestions")
+                                .icon(icon)
+                                .ghost()
+                                .small()
+                                .tooltip(tooltip),
+                        )
+                        .open(self.suggestions_open)
+                        .on_open_change(move |open, _, cx| {
+                            let open = *open;
+                            let _ =
+                                sidebar.update(cx, |this, cx| this.set_suggestions_open(open, cx));
+                        })
+                        .appearance(false)
+                        .content(move |_, _, cx| {
+                            animated_surface("suggestion-list-enter", list.clone(), cx)
+                        }),
+                )
+                // A dot while something is new, like an unread row.
+                .when(unseen, |el| {
+                    el.child(
+                        div()
+                            .absolute()
+                            .top(px(2.))
+                            .right(px(2.))
+                            .size(px(6.))
+                            .rounded_full()
+                            .bg(cx.theme().warning),
+                    )
+                }),
+        )
+    }
+
     fn on_project_picker_event(
         &mut self,
         _: Entity<ProjectPicker>,
@@ -492,6 +630,7 @@ impl SessionSidebar {
                     .flex()
                     .items_center()
                     .gap_1()
+                    .children(self.render_suggestions_button(cx))
                     .child(
                         Popover::new("new-session-popover")
                             .anchor(gpui_kit::Anchor::TopRight)
@@ -516,7 +655,9 @@ impl SessionSidebar {
                             })
                             .track_focus(&input_focus)
                             .appearance(false)
-                            .content(move |_, _, cx| animated_surface(picker.clone(), cx)),
+                            .content(move |_, _, cx| {
+                                animated_surface("project-picker-enter", picker.clone(), cx)
+                            }),
                     )
                     .child(
                         Button::new("new-project")

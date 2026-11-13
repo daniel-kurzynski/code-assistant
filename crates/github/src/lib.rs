@@ -1,5 +1,6 @@
 //! A GitHub client for pull requests: reading lists, details, checks,
-//! conversations and diffs, and writing comments, reviews and actions.
+//! conversations and diffs, and writing comments, reviews and actions; and
+//! for issue searches and board placements (suggested sessions).
 //!
 //! Ported from T3 Code's GitHub provider. Requests go over HTTPS with the
 //! token `GH_TOKEN` / `GITHUB_TOKEN` or the GitHub CLI's login supplies;

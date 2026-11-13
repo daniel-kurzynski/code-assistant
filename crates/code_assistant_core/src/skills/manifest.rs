@@ -71,7 +71,7 @@ pub fn parse_skill_content(content: &str) -> Result<(SkillManifest, String)> {
 ///
 /// The very first line must be exactly `---`; the frontmatter ends at the next
 /// `---` line. Returns `None` when no well-formed frontmatter block is present.
-fn split_frontmatter(content: &str) -> Option<(String, String)> {
+pub(crate) fn split_frontmatter(content: &str) -> Option<(String, String)> {
     let mut lines = content.lines();
     if lines.next().map(str::trim) != Some("---") {
         return None;

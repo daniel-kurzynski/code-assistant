@@ -585,6 +585,7 @@ impl MainScreen {
         debug!("Requesting chat list refresh");
         if let Some(gpui) = cx.try_global::<Gpui>() {
             gpui.cmd_refresh_chat_list();
+            gpui.cmd_load_suggestions();
         } else {
             warn!("No Gpui global available");
         }
@@ -1009,6 +1010,16 @@ impl MainScreen {
             }
             SessionSidebarEvent::PersistProjectRequested { project_name } => {
                 gpui.cmd_persist_project(project_name.clone());
+            }
+            SessionSidebarEvent::StartSuggestion { id } => {
+                gpui.cmd_start_suggestion(id.clone());
+            }
+            SessionSidebarEvent::DismissSuggestion { id, never } => {
+                gpui.cmd_dismiss_suggestion(id.clone(), *never);
+            }
+            SessionSidebarEvent::RefreshSuggestions => gpui.cmd_refresh_suggestions(),
+            SessionSidebarEvent::SuggestionsSeen { ids } => {
+                gpui.cmd_mark_suggestions_seen(ids.clone());
             }
             SessionSidebarEvent::SessionDeleteRequested { .. }
             | SessionSidebarEvent::AddProjectRequested => {
@@ -1675,8 +1686,13 @@ impl Render for MainScreen {
             .try_global::<Gpui>()
             .map(|g| g.persisted_projects.lock().unwrap().clone())
             .unwrap_or_default();
+        let suggestions = cx
+            .try_global::<Gpui>()
+            .map(|g| g.suggestions_snapshot())
+            .unwrap_or_default();
         self.project_sidebar.update(cx, |sidebar, cx| {
             sidebar.set_persisted_projects(persisted_projects, cx);
+            sidebar.set_suggestions(suggestions, cx);
         });
 
         let sessions_loaded = cx

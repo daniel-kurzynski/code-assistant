@@ -452,6 +452,11 @@ pub enum UiEvent {
     UpdateReviewDiff,
 
     // === Configuration Events ===
+    /// Suggested sessions changed (app-scoped): a refresh finished or
+    /// started, one was dismissed, seen or taken.
+    SuggestionsChanged {
+        snapshot: crate::suggestions::SuggestionsSnapshot,
+    },
     /// Configuration files (providers, model selection, ...) were changed on disk.
     /// The UI should reload model lists, settings sections, etc.
     ConfigChanged,

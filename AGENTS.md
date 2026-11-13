@@ -174,6 +174,22 @@ Layer 5 (binary):     code_assistant    — CLI, config, feature-gated frontend 
   4 h, download on click, app-scoped `UiEvent::UpdateStateChanged`; the GPUI
   title-bar chip installs and calls `cx.restart()`; see `docs/self-update.md`
 
+### Suggested Sessions
+- Session templates: Markdown files in `<config_dir>/session-templates/`,
+  front matter = session setup (model, effort, tier, sandbox, MCP servers,
+  tool groups, worktree) + `suggest:` rules, body = first user message with
+  `{{issue.url}}`-style placeholders (`code_assistant_core::session_templates`);
+  nothing is bundled
+- `code_assistant_core::suggestions` matches the rules against the projects'
+  GitHub issues/PRs (checkouts found like the PR view's,
+  `pull_requests::github_checkouts`), through the same `github::Client` the
+  pull request view uses (`search_issues`, `issue_or_pull_request`,
+  `board_placements` in `github::ops::issues`)
+- `SessionService::refresh_suggestions` / `start_suggestion` /
+  `start_from_template`; app-scoped `UiEvent::SuggestionsChanged`; GPUI shows
+  them behind a light bulb left of the sidebar's "+"; see
+  `docs/suggested-sessions.md`
+
 ### Session Storage
 - One folder per session below `sessions/`, the ID is its path:
   `<project-slug>/<YYYY-MM-DD>-<NNN>` (`persistence::layout`)

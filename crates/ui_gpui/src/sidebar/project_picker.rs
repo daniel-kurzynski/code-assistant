@@ -19,22 +19,22 @@ const ENTER_DURATION: Duration = Duration::from_millis(150);
 /// Where the surface starts, above where it comes to rest.
 const ENTER_OFFSET: f32 = -8.;
 
-/// The picker on a popup surface with gpui-component's dropdown motion: over
+/// A popover's content (the picker, the suggestion list) on a popup surface with gpui-component's dropdown motion: over
 /// 150ms the surface fades in while sliding the last 8px down out of the
 /// trigger. GPUI has no group compositing, so the ring and shadow rise with
 /// the cube of the fade; otherwise they would show through the translucent
 /// panel as a dark slab. gpui-component keeps this motion crate-private
 /// (`popover::dropdown_popup`) for Select, Combobox and DatePicker; its
 /// plain `Popover` has none, so it is mirrored here.
-pub fn animated_surface(picker: Entity<ProjectPicker>, cx: &App) -> AnyElement {
+pub fn animated_surface(id: &'static str, content: impl IntoElement, cx: &App) -> AnyElement {
     // Read out here: the animation runs long after `cx` is gone.
     let ring = cx.theme().foreground.alpha(0.1);
     div()
         .occlude()
         .popover_style(cx)
-        .child(picker)
+        .child(content)
         .with_animation(
-            "project-picker-enter",
+            id,
             Animation::new(ENTER_DURATION).with_easing(ease_out_cubic),
             move |surface, delta| {
                 surface

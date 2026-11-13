@@ -20,6 +20,7 @@ const DOCUMENTS: &[&str] = &[
     include_str!("mutations.graphql"),
     include_str!("heads.graphql"),
     include_str!("stacks.graphql"),
+    include_str!("issues.graphql"),
 ];
 
 /// Every operation by name, ready to send.
@@ -105,11 +106,14 @@ mod tests {
             "AddComment",
             "AddReaction",
             "AddReviewThreadReply",
+            "BoardPlacements",
             "ClosePullRequest",
             "ConvertPullRequestToDraft",
             "DeletePullRequestBranch",
             "DisablePullRequestAutoMerge",
             "EnablePullRequestAutoMerge",
+            "IssueOrPullRequest",
+            "IssueSearch",
             "LabelCandidates",
             "MarkPullRequestReadyForReview",
             "MergePullRequest",

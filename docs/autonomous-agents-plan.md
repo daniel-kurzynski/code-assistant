@@ -6,9 +6,8 @@ The first scope is smaller and described in `docs/suggested-sessions-plan.md`:
 session templates and suggestions that start an ordinary, pre-filled session
 with one click. This document is where that leads; its "agent definition" is
 that plan's session template with a non-interactive policy, its "automation"
-is a suggestion rule that may run by itself. Only the `architect` and
-`implementer` templates ship at first; the others listed here come with the
-phases that need them.
+is a suggestion rule that may run by itself. No templates are bundled; the
+ones listed below are examples of what users would write.
 
 ## Goal
 

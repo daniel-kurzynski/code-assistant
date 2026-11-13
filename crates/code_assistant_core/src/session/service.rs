@@ -259,6 +259,8 @@ pub struct SessionService {
     control_tx: async_channel::Sender<Command>,
     admission: Arc<tokio::sync::Semaphore>,
     events: EventStream,
+    /// Suggested sessions (see [`crate::suggestions`]).
+    suggestions: Arc<crate::suggestions::SuggestionStore>,
 }
 
 impl SessionService {
@@ -321,6 +323,7 @@ impl SessionService {
                 control_tx,
                 admission,
                 events,
+                suggestions: Arc::default(),
             },
             worker,
         )
@@ -2727,6 +2730,8 @@ pub use files::{
 mod lifecycle;
 mod new_context;
 mod pull_requests;
+mod suggestions;
+pub use suggestions::{StartFromTemplate, StartedSession};
 
 #[cfg(test)]
 mod recovery_tests;

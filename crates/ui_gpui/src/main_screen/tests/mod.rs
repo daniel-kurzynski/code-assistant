@@ -9,4 +9,5 @@ mod pull_requests;
 mod sidebar;
 mod stored_outputs;
 mod sub_agents;
+mod suggestions;
 mod wakeups;

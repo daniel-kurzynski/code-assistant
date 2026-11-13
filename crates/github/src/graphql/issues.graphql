@@ -1,0 +1,132 @@
+# Issues and pull requests for suggested sessions: those a search finds, the one a session is
+# started for, and where they sit on project boards.
+
+# One row of an issue search. `first` bounds rather than pages: twenty labels and ten assignees
+# are more than a suggestion shows.
+fragment IssueRow on Issue {
+  id
+  number
+  title
+  url
+  updatedAt
+  author {
+    __typename
+    login
+  }
+  repository {
+    nameWithOwner
+  }
+  labels(first: 20) {
+    nodes {
+      name
+      color
+    }
+  }
+  assignees(first: 10) {
+    nodes {
+      login
+    }
+  }
+}
+
+# The same row for a pull request, with its branches.
+fragment PullRequestIssueRow on PullRequest {
+  id
+  number
+  title
+  url
+  updatedAt
+  isDraft
+  headRefName
+  baseRefName
+  author {
+    __typename
+    login
+  }
+  repository {
+    nameWithOwner
+  }
+  labels(first: 20) {
+    nodes {
+      name
+      color
+    }
+  }
+  assignees(first: 10) {
+    nodes {
+      login
+    }
+  }
+}
+
+# Issues and pull requests across the repositories a query names. `$first` is at most 100.
+query IssueSearch($q: String!, $first: Int!) {
+  search(query: $q, type: ISSUE, first: $first) {
+    nodes {
+      __typename
+      ...IssueRow
+      ...PullRequestIssueRow
+    }
+  }
+}
+
+# One issue or pull request by number, with its description.
+query IssueOrPullRequest($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    issueOrPullRequest(number: $number) {
+      __typename
+      ... on Issue {
+        ...IssueRow
+        body
+      }
+      ... on PullRequest {
+        ...PullRequestIssueRow
+        body
+      }
+    }
+  }
+}
+
+# Where issues and pull requests sit on project boards (Projects v2), with the value of one
+# single-select field (the board column). Needs the `read:project` scope.
+query BoardPlacements($ids: [ID!]!, $field: String!) {
+  nodes(ids: $ids) {
+    __typename
+    ... on Issue {
+      id
+      projectItems(first: 20) {
+        nodes {
+          ...BoardPlacement
+        }
+      }
+    }
+    ... on PullRequest {
+      id
+      projectItems(first: 20) {
+        nodes {
+          ...BoardPlacement
+        }
+      }
+    }
+  }
+}
+
+fragment BoardPlacement on ProjectV2Item {
+  project {
+    number
+    owner {
+      __typename
+      ... on Organization {
+        login
+      }
+      ... on User {
+        login
+      }
+    }
+  }
+  fieldValueByName(name: $field) {
+    ... on ProjectV2ItemFieldSingleSelectValue {
+      name
+    }
+  }
+}
